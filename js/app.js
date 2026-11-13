@@ -84,7 +84,7 @@ document.getElementById('contacts-list').onclick = (e) => {
   }
 };
 
-// Mail List Interactions (Incremental Star Toggle + Reader)
+// Mail List Interactions (Incremental Star Toggle + Reader + Trash Handlers)
 document.getElementById('mail-list').onclick = (e) => {
   const starId = e.target.dataset.star;
   if (starId) {
@@ -105,6 +105,17 @@ document.getElementById('mail-list').onclick = (e) => {
     onDelete: (id) => {
       store.moveToTrash(id);
       ui.switchView(store.currentFolder, identity.publicKey);
+    },
+    onRestore: (id) => {
+      store.restoreFromTrash(id);
+      ui.updateInboxBadge();
+      ui.switchView('trash', identity.publicKey);
+    },
+    onPermanentDelete: (id) => {
+      if (confirm('Permanently delete this message?')) {
+        store.permanentDelete(id);
+        ui.switchView('trash', identity.publicKey);
+      }
     },
     onSaveSender: (pubkey, msgId) => {
       const nickname = prompt('Enter a nickname for this sender:');
@@ -128,8 +139,6 @@ document.getElementById('send-btn').onclick = async () => {
   ui.setStatus('Resolving recipient & encrypting...');
   try {
     const recipientPk = await resolveRecipient(rawTo);
-    
-    // Grab your current human-readable handle to send along securely
     const myHandle = localStorage.getItem('libremail_handle') || `${identity.publicKey.slice(0, 6)}...@...${identity.publicKey.slice(-4)}`;
 
     const giftWrap = encryptEmail(identity.secretKey, recipientPk, { 
@@ -171,7 +180,6 @@ function connectNetwork() {
     mySecretKey: identity.secretKey,
     myPublicKey: identity.publicKey,
     onNewEmail(decrypted) {
-      // If the incoming message contains a senderHandle, save it locally for this pubkey
       if (decrypted.senderHandle) {
         localStorage.setItem(`handle_${decrypted.from}`, decrypted.senderHandle);
       }
