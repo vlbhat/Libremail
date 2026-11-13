@@ -9,27 +9,30 @@ store.setSecretKey(identity.hex);
 
 document.getElementById('custom-relay').value = store.relayUrl;
 
-// Check if user has saved a human-readable handle in localStorage
-const savedHandle = localStorage.getItem('libremail_handle') || '';
-document.getElementById('my-address-short').textContent =
-  savedHandle || `${identity.publicKey.slice(0, 10)}...${identity.publicKey.slice(-6)}`;
+// Header: Display saved human-readable handle or fallback to truncated public key
+const addressSpan = document.getElementById('my-address-short');
+const updateHeaderDisplay = () => {
+  const currentHandle = localStorage.getItem('libremail_handle') || '';
+  addressSpan.textContent = currentHandle || `${identity.publicKey.slice(0, 10)}...${identity.publicKey.slice(-6)}`;
+};
+updateHeaderDisplay();
 
-// Header & Sidebar Actions (Clicking the address pill sets or updates your human-readable handle)
+// Clicking the top-right pill lets you set or update your human-readable handle
 document.getElementById('copy-address-btn').onclick = () => {
-  const handle = prompt(
-    'Enter your human-readable email handle (e.g. alice@vercel.app)\n\n(Click Cancel to copy your raw hex public key instead):',
-    savedHandle
+  const existingHandle = localStorage.getItem('libremail_handle') || '';
+  const newHandle = prompt(
+    'Enter your human-readable email handle (e.g. alice@vercel.app):\n\n(Leave blank and click OK to reset back to your public key)',
+    existingHandle
   );
 
-  if (handle !== null) {
-    if (handle.trim() === '') {
+  if (newHandle !== null) {
+    const trimmed = newHandle.trim();
+    if (trimmed === '') {
       localStorage.removeItem('libremail_handle');
-      document.getElementById('my-address-short').textContent =
-        `${identity.publicKey.slice(0, 10)}...${identity.publicKey.slice(-6)}`;
     } else {
-      localStorage.setItem('libremail_handle', handle.trim());
-      document.getElementById('my-address-short').textContent = handle.trim();
+      localStorage.setItem('libremail_handle', trimmed);
     }
+    updateHeaderDisplay();
   } else {
     navigator.clipboard.writeText(identity.publicKey);
     alert(`Raw public key copied to clipboard:\n\n${identity.publicKey}`);
