@@ -7,14 +7,33 @@ store.init();
 const identity = initIdentity(store.getSecretKey());
 store.setSecretKey(identity.hex);
 
-document.getElementById('my-address-short').textContent =
-  `${identity.publicKey.slice(0, 10)}...${identity.publicKey.slice(-6)}`;
 document.getElementById('custom-relay').value = store.relayUrl;
 
-// Header & Sidebar Actions
+// Check if user has saved a human-readable handle in localStorage
+const savedHandle = localStorage.getItem('libremail_handle') || '';
+document.getElementById('my-address-short').textContent =
+  savedHandle || `${identity.publicKey.slice(0, 10)}...${identity.publicKey.slice(-6)}`;
+
+// Header & Sidebar Actions (Clicking the address pill sets or updates your human-readable handle)
 document.getElementById('copy-address-btn').onclick = () => {
-  navigator.clipboard.writeText(identity.publicKey);
-  alert(`Public email address copied:\n\n${identity.publicKey}`);
+  const handle = prompt(
+    'Enter your human-readable email handle (e.g. alice@vercel.app)\n\n(Click Cancel to copy your raw hex public key instead):',
+    savedHandle
+  );
+
+  if (handle !== null) {
+    if (handle.trim() === '') {
+      localStorage.removeItem('libremail_handle');
+      document.getElementById('my-address-short').textContent =
+        `${identity.publicKey.slice(0, 10)}...${identity.publicKey.slice(-6)}`;
+    } else {
+      localStorage.setItem('libremail_handle', handle.trim());
+      document.getElementById('my-address-short').textContent = handle.trim();
+    }
+  } else {
+    navigator.clipboard.writeText(identity.publicKey);
+    alert(`Raw public key copied to clipboard:\n\n${identity.publicKey}`);
+  }
 };
 
 document.getElementById('save-relay-btn').onclick = () => {
