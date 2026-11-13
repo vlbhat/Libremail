@@ -1,0 +1,5 @@
+{
+  "names": {
+    "alice": "YOUR_64_CHARACTER_PUBLIC_KEY_HERE"
+  }
+}
