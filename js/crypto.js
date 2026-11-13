@@ -14,57 +14,49 @@ export function initIdentity(savedHexKey) {
 export async function resolveRecipient(input) {
   const clean = input.trim().toLowerCase();
 
-  // 1. If it's already a 64-character hex public key, return it directly
+  // 1. If it's a 64-character hex public key, return it directly
   if (/^[0-9a-f]{64}$/.test(clean)) return clean;
 
-  // 2. If it's a handle containing '@'
+  // 2. Check local storage cache/override first
+  const localKey = localStorage.getItem(`nip05_${clean}`);
+  if (localKey) return localKey;
+
+  // 3. Check your saved Contacts list (matches name or nip05 handle)
+  try {
+    const contacts = JSON.parse(localStorage.getItem('libremail_contacts') || '[]');
+    const matchedContact = contacts.find(c => 
+      c.name.toLowerCase() === clean || 
+      (c.nip05 && c.nip05.toLowerCase() === clean)
+    );
+    if (matchedContact) return matchedContact.pubkey;
+  } catch (e) {
+    // Ignore parse errors
+  }
+
+  // 4. If it contains '@', attempt live NIP-05 fetch, but catch all CORS/network errors safely
   if (clean.includes('@')) {
     if (nip05Cache.has(clean)) return nip05Cache.get(clean);
 
     const [name, domain] = clean.split('@');
-    if (!name || !domain) throw new Error('Invalid email address format.');
-
-    // Try fetching the live NIP-05 file, but gracefully catch network/CORS blocks
-    try {
-      const res = await fetch(`https://${domain}/.well-known/nostr.json?name=${encodeURIComponent(name)}`);
-      if (res.ok) {
-        const data = await res.json();
-        const pubkey = data.names?.[name];
-        if (pubkey) {
-          nip05Cache.set(clean, pubkey);
-          return pubkey;
+    if (name && domain) {
+      try {
+        const res = await fetch(`https://${domain}/.well-known/nostr.json?name=${encodeURIComponent(name)}`);
+        if (res.ok) {
+          const data = await res.json();
+          const pubkey = data.names?.[name];
+          if (pubkey) {
+            nip05Cache.set(clean, pubkey);
+            return pubkey;
+          }
         }
+      } catch (err) {
+        // Silently bypass network/CORS blocks so app never crashes
       }
-    } catch (err) {
-      console.warn(`Network fetch failed for ${domain}, checking fallbacks...`);
     }
-
-    // Fallback A: Check if a local mapping exists in localStorage (e.g. nip05_alice@vercel.app)
-    const localKey = localStorage.getItem(`nip05_${clean}`);
-    if (localKey) {
-      nip05Cache.set(clean, localKey);
-      return localKey;
-    }
-
-    // Fallback B: Check if this handle or name matches anyone saved in your Contacts list
-    try {
-      const contacts = JSON.parse(localStorage.getItem('libremail_contacts') || '[]');
-      const matchedContact = contacts.find(c => 
-        c.name.toLowerCase() === clean || 
-        (c.nip05 && c.nip05.toLowerCase() === clean)
-      );
-      if (matchedContact) {
-        nip05Cache.set(clean, matchedContact.pubkey);
-        return matchedContact.pubkey;
-      }
-    } catch (e) {
-      // Ignore parse errors
-    }
-
-    throw new Error(`Could not resolve "${clean}". Add them to your Contacts or check the address.`);
   }
 
-  throw new Error('Enter a valid 64-character public key or user@domain.com address.');
+  // 5. Ultimate Fallback: If no match is found, throw a clean, informative instruction
+  throw new Error(`Could not resolve "${clean}". Please add this user to your Contacts first.`);
 }
 
 export function encryptEmail(senderSk, recipientPk, payloadObj, replyToId = null) {
