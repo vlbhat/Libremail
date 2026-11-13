@@ -14,14 +14,17 @@ export function initIdentity(savedHexKey) {
 export async function resolveRecipient(input) {
   const clean = input.trim().toLowerCase();
 
+  // 1. If it's a 64-character hex public key, return it directly
   if (/^[0-9a-f]{64}$/.test(clean)) return clean;
 
+  // 2. If it's a handle containing '@'
   if (clean.includes('@')) {
     if (nip05Cache.has(clean)) return nip05Cache.get(clean);
 
     const [name, domain] = clean.split('@');
     if (!name || !domain) throw new Error('Invalid email address format.');
 
+    // Try fetching the live NIP-05 file, but gracefully catch network/CORS blocks
     try {
       const res = await fetch(`https://${domain}/.well-known/nostr.json?name=${encodeURIComponent(name)}`);
       if (res.ok) {
@@ -32,18 +35,18 @@ export async function resolveRecipient(input) {
           return pubkey;
         }
       }
-    } catch {
-      // Domain fetch failed; fall back to local storage map below
+    } catch (err) {
+      console.warn(`Network fetch failed for ${domain}, checking local storage fallback...`);
     }
 
-    // Local fallback for test handles or custom domains without a nostr.json file
+    // Fallback: Check if a local mapping exists in localStorage (e.g. nip05_alice@vercel.app)
     const localKey = localStorage.getItem(`nip05_${clean}`);
     if (localKey) {
       nip05Cache.set(clean, localKey);
       return localKey;
     }
 
-    throw new Error(`Could not resolve NIP-05 address: ${clean}`);
+    throw new Error(`Could not resolve "${clean}". Domain unreachable or handle not registered.`);
   }
 
   throw new Error('Enter a valid 64-character public key or user@domain.com address.');
