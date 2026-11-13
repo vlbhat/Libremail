@@ -22,15 +22,28 @@ export async function resolveRecipient(input) {
     const [name, domain] = clean.split('@');
     if (!name || !domain) throw new Error('Invalid email address format.');
 
-    const res = await fetch(`https://${domain}/.well-known/nostr.json?name=${encodeURIComponent(name)}`);
-    if (!res.ok) throw new Error(`Could not reach domain ${domain}`);
+    try {
+      const res = await fetch(`https://${domain}/.well-known/nostr.json?name=${encodeURIComponent(name)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const pubkey = data.names?.[name];
+        if (pubkey) {
+          nip05Cache.set(clean, pubkey);
+          return pubkey;
+        }
+      }
+    } catch {
+      // Domain fetch failed; fall back to local storage map below
+    }
 
-    const data = await res.json();
-    const pubkey = data.names?.[name];
-    if (!pubkey) throw new Error(`User "${name}" not found at ${domain}`);
+    // Local fallback for test handles or custom domains without a nostr.json file
+    const localKey = localStorage.getItem(`nip05_${clean}`);
+    if (localKey) {
+      nip05Cache.set(clean, localKey);
+      return localKey;
+    }
 
-    nip05Cache.set(clean, pubkey);
-    return pubkey;
+    throw new Error(`Could not resolve NIP-05 address: ${clean}`);
   }
 
   throw new Error('Enter a valid 64-character public key or user@domain.com address.');
@@ -84,6 +97,7 @@ export function decryptEmail(recipientSk, giftWrapEvent) {
     from: seal.pubkey,
     subject: data.subject,
     body: data.body,
+    senderHandle: data.senderHandle || null,
     replyTo: replyTag ? replyTag[1] : null,
     time: rumor.created_at * 1000,
   };
