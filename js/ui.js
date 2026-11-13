@@ -91,6 +91,7 @@ export const ui = {
 
     const replySubject = msg.subject.startsWith('Re:') ? msg.subject : `Re: ${msg.subject}`;
     const isSaved = store.contacts.some(c => c.pubkey === msg.from);
+    const isTrash = msg.folder === 'trash';
 
     readerEl.innerHTML = `
       <div class="reader-header">
@@ -102,16 +103,28 @@ export const ui = {
         <div>${new Date(msg.time).toLocaleString()}</div>
       </div>
       <div class="reader-body">${escapeHtml(msg.body)}</div>
-      <button class="action-btn" id="reply-btn">↩ Reply</button>
-      ${!isSaved && msg.from !== myPublicKey ? `<button class="action-btn" id="save-sender-btn">➕ Save Sender</button>` : ''}
-      <button class="action-btn" id="trash-btn">🗑️ Delete</button>
+
+      ${isTrash ? `
+        <button class="action-btn" id="restore-btn">♻️ Restore to Inbox</button>
+        <button class="action-btn" id="perm-delete-btn" style="color: #d93025;">🗑️ Delete Forever</button>
+      ` : `
+        <button class="action-btn" id="reply-btn">↩ Reply</button>
+        ${!isSaved && msg.from !== myPublicKey ? `<button class="action-btn" id="save-sender-btn">➕ Save Sender</button>` : ''}
+        <button class="action-btn" id="trash-btn">🗑️ Delete</button>
+      `}
     `;
 
     document.getElementById('back-btn').onclick = handlers.onBack;
-    document.getElementById('reply-btn').onclick = () => handlers.onReply(msg.from, replySubject, msg.id);
-    document.getElementById('trash-btn').onclick = () => handlers.onDelete(msg.id);
-    const saveBtn = document.getElementById('save-sender-btn');
-    if (saveBtn) saveBtn.onclick = () => handlers.onSaveSender(msg.from, msg.id);
+
+    if (isTrash) {
+      document.getElementById('restore-btn').onclick = () => handlers.onRestore(msg.id);
+      document.getElementById('perm-delete-btn').onclick = () => handlers.onPermanentDelete(msg.id);
+    } else {
+      document.getElementById('reply-btn').onclick = () => handlers.onReply(msg.from, replySubject, msg.id);
+      document.getElementById('trash-btn').onclick = () => handlers.onDelete(msg.id);
+      const saveBtn = document.getElementById('save-sender-btn');
+      if (saveBtn) saveBtn.onclick = () => handlers.onSaveSender(msg.from, msg.id);
+    }
   },
 
   switchView(folder, myPublicKey) {
