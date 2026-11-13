@@ -4,7 +4,6 @@ import { publishToRelays, subscribeToInbox } from './network.js';
 import { ui } from './ui.js';
 
 store.init();
-// Updated for Web Worker: initIdentity is now asynchronous
 const identity = await initIdentity(store.getSecretKey());
 store.setSecretKey(identity.hex);
 
@@ -18,25 +17,14 @@ const updateHeaderDisplay = () => {
 };
 updateHeaderDisplay();
 
-// Clicking the top-right pill lets you set or update your human-readable handle
-document.getElementById('copy-address-btn').onclick = () => {
-  const existingHandle = localStorage.getItem('libremail_handle') || '';
-  const newHandle = prompt(
-    'Enter your human-readable email handle (e.g. alice@vercel.app):\n\n(Leave blank and click OK to reset back to your public key)',
-    existingHandle
-  );
-
-  if (newHandle !== null) {
-    const trimmed = newHandle.trim();
-    if (trimmed === '') {
-      localStorage.removeItem('libremail_handle');
-    } else {
-      localStorage.setItem('libremail_handle', trimmed);
-    }
-    updateHeaderDisplay();
-  } else {
-    navigator.clipboard.writeText(identity.publicKey);
-    alert(`Raw public key copied to clipboard:\n\n${identity.publicKey}`);
+// Tapping the profile pill instantly copies your full public key to the clipboard
+document.getElementById('copy-address-btn').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(identity.publicKey);
+    ui.setStatus('Public key copied to clipboard ✓');
+    alert(`Public key successfully copied to clipboard:\n\n${identity.publicKey}`);
+  } catch (err) {
+    prompt('Copy your public key below:', identity.publicKey);
   }
 };
 
@@ -142,7 +130,6 @@ document.getElementById('send-btn').onclick = async () => {
     const recipientPk = await resolveRecipient(rawTo);
     const myHandle = localStorage.getItem('libremail_handle') || `${identity.publicKey.slice(0, 6)}...@...${identity.publicKey.slice(-4)}`;
 
-    // Updated for Web Worker: encryptEmail is now asynchronous
     const giftWrap = await encryptEmail(identity.secretKey, recipientPk, { 
       subject, 
       body, 
