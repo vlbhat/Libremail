@@ -2,86 +2,77 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://esm.sh; style-src 'self'; img-src 'self' data:; connect-src 'self' https: wss:; worker-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none';">
   <title>LibreMail — Decentralized Webmail</title>
-  
-  <!-- Critical CSS Inlined to eliminate initial render blocking -->
-  <style>
-    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f3f4f6; color: #1f2937; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-    header { height: 60px; background: #ffffff; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; flex-shrink: 0; }
-    .logo { font-weight: bold; font-size: 1.2rem; display: flex; align-items: center; gap: 8px; }
-    .workspace { display: flex; flex: 1; overflow: hidden; }
-    aside { width: 240px; background: #f9fafb; border-right: 1px solid #e5e7eb; padding: 16px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
-    main { flex: 1; display: flex; flex-direction: column; background: #ffffff; overflow: hidden; position: relative; }
-  </style>
-
-  <!-- Asynchronously load full styles without blocking initial render -->
-  <link rel="stylesheet" href="css/styles.css" media="print" onload="this.media='all'">
-  <noscript><link rel="stylesheet" href="css/styles.css"></noscript>
+  <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-
   <header>
     <div class="logo">✉️ LibreMail</div>
     <div class="search-bar">
-      <input type="text" id="search-input" placeholder="Search encrypted mail...">
+      <input type="search" id="search-input" placeholder="Search encrypted mail..." aria-label="Search mail">
     </div>
-    <div class="account-pill" id="copy-address-btn" title="Click to copy your full public address">
-      <span class="dot"></span>
+    <button class="account-pill" id="copy-address-btn" type="button" title="Copy your public key">
+      <span class="dot" aria-hidden="true"></span>
       <span id="my-address-short">Loading...</span> 📋
-    </div>
+    </button>
   </header>
 
   <div class="workspace">
-    <aside>
-      <button class="compose-btn" id="compose-btn">✏️ Compose</button>
-      <div class="nav-item active" id="nav-inbox" data-folder="inbox"><span>📥 Inbox</span><span id="count-inbox">0</span></div>
-      <div class="nav-item" id="nav-starred" data-folder="starred"><span>⭐ Starred</span></div>
-      <div class="nav-item" id="nav-sent" data-folder="sent"><span>📤 Sent</span></div>
-      <div class="nav-item" id="nav-trash" data-folder="trash"><span>🗑️ Trash</span></div>
-      <div class="nav-item" id="nav-contacts" data-folder="contacts"><span>👥 Contacts</span></div>
+    <aside aria-label="Main navigation">
+      <button class="compose-btn" id="compose-btn" type="button">✏️ Compose</button>
+      <button class="nav-item active" id="nav-inbox" data-folder="inbox" type="button"><span>📥 Inbox</span><span id="count-inbox">0</span></button>
+      <button class="nav-item" id="nav-starred" data-folder="starred" type="button"><span>⭐ Starred</span></button>
+      <button class="nav-item" id="nav-sent" data-folder="sent" type="button"><span>📤 Sent</span></button>
+      <button class="nav-item" id="nav-trash" data-folder="trash" type="button"><span>🗑️ Trash</span></button>
+      <button class="nav-item" id="nav-contacts" data-folder="contacts" type="button"><span>👥 Contacts</span></button>
 
       <div class="relay-box">
-        <strong>Relay Server:</strong><br>
-        <input type="text" id="custom-relay" value="wss://relay.primal.net">
-        <button id="save-relay-btn">Connect Relay</button>
+        <label for="custom-relay"><strong>Relay Server:</strong></label>
+        <input type="url" id="custom-relay" value="wss://relay.primal.net" autocomplete="url">
+        <button id="save-relay-btn" type="button">Connect Relay</button>
       </div>
     </aside>
 
     <main>
       <div class="toolbar">
         <span id="folder-title">Inbox</span>
-        <span id="status-text">Connecting to decentralized relay...</span>
+        <span id="status-text" role="status" aria-live="polite">Initializing...</span>
       </div>
-      <div class="mail-list" id="mail-list"></div>
+      <div class="mail-list" id="mail-list" aria-label="Messages"></div>
       <div class="reader" id="mail-reader"></div>
-
       <div class="contacts-view" id="contacts-view">
         <h2>Saved Contacts</h2>
         <div class="contacts-form">
-          <input type="text" id="contact-name" placeholder="Nickname (e.g. Bob)">
-          <input type="text" id="contact-address" placeholder="Public Key OR user@domain.com">
-          <button class="send-btn" id="add-contact-btn">Add Contact</button>
+          <input type="text" id="contact-name" placeholder="Nickname (e.g. Bob)" aria-label="Contact nickname">
+          <input type="text" id="contact-address" placeholder="Public key or user@domain.com" aria-label="Contact address">
+          <button class="send-btn" id="add-contact-btn" type="button">Add Contact</button>
         </div>
         <div id="contacts-list"></div>
       </div>
     </main>
   </div>
 
-  <div class="compose-modal" id="compose-modal">
+  <section class="compose-modal" id="compose-modal" role="dialog" aria-modal="true" aria-labelledby="compose-title">
     <div class="compose-header">
       <span id="compose-title">New Message</span>
-      <span class="close-btn" id="close-compose-btn">✕</span>
+      <button class="close-btn" id="close-compose-btn" type="button" aria-label="Close compose">✕</button>
     </div>
-    <input type="text" id="to-input" list="contact-suggestions" placeholder="To (Public key, NIP-05 user@domain.com, or contact)">
+    <label class="visually-hidden" for="to-input">Recipient</label>
+    <input type="text" id="to-input" list="contact-suggestions" placeholder="To (public key, NIP-05 address, or contact)">
     <datalist id="contact-suggestions"></datalist>
-    <input type="text" id="sub-input" placeholder="Subject">
-    <textarea id="body-input" rows="8" placeholder="Write your end-to-end encrypted email..."></textarea>
+    <label class="visually-hidden" for="sub-input">Subject</label>
+    <input type="text" id="sub-input" placeholder="Subject" maxlength="200">
+    <label class="visually-hidden" for="body-input">Message body</label>
+    <textarea id="body-input" rows="8" maxlength="20000" placeholder="Write your end-to-end encrypted message..."></textarea>
     <input type="hidden" id="reply-id-input">
     <div class="compose-footer">
-      <button class="send-btn" id="send-btn">Send</button>
-      <span class="crypto-tag">🔒 NIP-17 + NIP-05 Ready</span>
+      <button class="send-btn" id="send-btn" type="button">Send</button>
+      <span class="crypto-tag">🔒 NIP-17 + NIP-05</span>
     </div>
-  </div>
+  </section>
 
   <script type="module" src="js/app.js"></script>
 </body>

@@ -3,40 +3,79 @@ import { decryptEmail } from './crypto.js';
 
 const pool = new SimplePool();
 let activeSub = null;
+let activeRelay = null;
 
-export async function publishToRelays(primaryRelay, giftWrapEvent) {
-  if (!primaryRelay) {
-    throw new Error('Relay URL is required.');
+function normalizeRelay(value) {
+  let parsed;
+  try {
+    parsed = new URL(String(value || '').trim());
+  } catch (error) {
+    throw new Error('Enter a valid relay URL.');
   }
 
-  const relays = [primaryRelay];
-  const publishPromises = pool.publish(relays, giftWrapEvent);
-  await Promise.any(publishPromises);
+  const localDevelopment = parsed.protocol === 'ws:' &&
+    ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname);
+  if (parsed.protocol !== 'wss:' && !localDevelopment) {
+    throw new Error('Relays must use secure wss:// URLs (ws:// is allowed only on localhost).');
+  }
+  if (parsed.username || parsed.password || parsed.hash) {
+    throw new Error('Relay URLs cannot include credentials or fragments.');
+  }
+  return parsed.href.replace(/\/$/, '');
 }
 
-export function subscribeToInbox({ primaryRelay, mySecretKey, myPublicKey, onNewEmail, onConnected }) {
-  if (!primaryRelay || !myPublicKey) {
-    throw new Error('Primary relay and public key are required.');
+export async function publishToRelays(primaryRelay, giftWrapEvent) {
+  const relay = normalizeRelay(primaryRelay);
+  if (!giftWrapEvent || giftWrapEvent.kind !== 1059) {
+    throw new Error('Cannot publish an invalid gift-wrap event.');
   }
 
-  if (activeSub) activeSub.close();
+  const results = await Promise.allSettled(pool.publish([relay], giftWrapEvent));
+  if (!results.some(result => result.status === 'fulfilled')) {
+    const reason = results.find(result => result.status === 'rejected')?.reason;
+    throw new Error(reason?.message || `Could not publish to ${relay}.`);
+  }
+}
 
-  const relays = [primaryRelay];
-  const threeDaysAgo = Math.floor(Date.now() / 1000) - (3 * 86400);
+export function subscribeToInbox({ primaryRelay, mySecretKey, myPublicKey, onNewEmail, onConnected, onError }) {
+  const relay = normalizeRelay(primaryRelay);
+  if (!(mySecretKey instanceof Uint8Array) || !/^[0-9a-f]{64}$/i.test(myPublicKey || '')) {
+    throw new Error('A valid account identity is required to connect.');
+  }
 
-  activeSub = pool.subscribeMany(relays, [{ kinds: [1059], '#p': [myPublicKey], since: threeDaysAgo }], {
-    async onevent(giftWrapEvent) {
-      try {
-        const decrypted = await decryptEmail(mySecretKey, giftWrapEvent);
-        if (decrypted) {
-          onNewEmail?.(decrypted);
+  if (activeSub) {
+    activeSub.close();
+    activeSub = null;
+  }
+  activeRelay = relay;
+
+  const since = Math.floor(Date.now() / 1000) - (3 * 86400);
+  try {
+    activeSub = pool.subscribeMany([relay], [{ kinds: [1059], '#p': [myPublicKey], since }], {
+      async onevent(giftWrapEvent) {
+        try {
+          const decrypted = await decryptEmail(mySecretKey, giftWrapEvent);
+          if (decrypted) onNewEmail?.(decrypted);
+        } catch (error) {
+          console.warn('An inbox event could not be decrypted.', error);
         }
-      } catch (err) {
-        console.error('Decryption failed:', err);
-      }
-    },
-    oneose() {
-      onConnected?.(primaryRelay);
-    },
-  });
+      },
+      oneose() {
+        onConnected?.(relay);
+      },
+      onclose(reason) {
+        if (activeRelay === relay) onError?.(reason || `Connection to ${relay} closed.`);
+      },
+    });
+  } catch (error) {
+    activeSub = null;
+    onError?.(error.message || 'Could not subscribe to the relay.');
+    throw error;
+  }
+}
+
+export function closeInboxSubscription() {
+  activeRelay = null;
+  if (activeSub) activeSub.close();
+  activeSub = null;
 }
