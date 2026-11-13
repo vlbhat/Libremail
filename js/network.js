@@ -18,9 +18,10 @@ export function subscribeToInbox({ primaryRelay, mySecretKey, myPublicKey, onNew
   const threeDaysAgo = Math.floor(Date.now() / 1000) - (3 * 86400);
 
   activeSub = pool.subscribeMany(relays, [{ kinds: [1059], '#p': [myPublicKey], since: threeDaysAgo }], {
-    onevent(giftWrapEvent) {
+    async onevent(giftWrapEvent) {
       try {
-        const decrypted = decryptEmail(mySecretKey, giftWrapEvent);
+        // Await asynchronous decryption via Web Worker
+        const decrypted = await decryptEmail(mySecretKey, giftWrapEvent);
         if (decrypted) onNewEmail(decrypted);
       } catch {
         // Ignore non-matching or malformed events
