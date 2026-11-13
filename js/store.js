@@ -54,6 +54,21 @@ export const store = {
     this.scheduleSave();
   },
 
+  restoreFromTrash(id) {
+    const msg = this.emails.find(m => m.id === id);
+    if (!msg) return;
+    msg.folder = 'inbox';
+    this.scheduleSave();
+  },
+
+  permanentDelete(id) {
+    const index = this.emails.findIndex(m => m.id === id);
+    if (index === -1) return;
+    this.seenIds.delete(id);
+    this.emails.splice(index, 1);
+    this.scheduleSave();
+  },
+
   addContact(contact) {
     this.contacts.push(contact);
     this.scheduleSave();
