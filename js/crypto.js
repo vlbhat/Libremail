@@ -1,8 +1,5 @@
-import { verifyEvent } from 'https://esm.sh/nostr-tools@2.10.4/pure';
-import * as nip44 from 'https://esm.sh/nostr-tools@2.10.4/nip44';
 import { hexToBytes } from 'https://esm.sh/@noble/hashes@1.3.3/utils';
 
-// Initialize the Web Worker
 const worker = new Worker(new URL('./crypto-worker.js', import.meta.url), { type: 'module' });
 
 let messageId = 0;
@@ -29,8 +26,7 @@ function runInWorker(action, payload) {
 const nip05Cache = new Map();
 
 export async function initIdentity(savedHexKey) {
-  const result = await runInWorker('initIdentity', { savedHexKey });
-  return result;
+  return await runInWorker('initIdentity', { savedHexKey });
 }
 
 export async function resolveRecipient(input) {
@@ -48,9 +44,7 @@ export async function resolveRecipient(input) {
       (c.nip05 && c.nip05.toLowerCase() === clean)
     );
     if (matchedContact) return matchedContact.pubkey;
-  } catch (e) {
-    // Ignore parse errors
-  }
+  } catch (e) {}
 
   if (clean.includes('@')) {
     if (nip05Cache.has(clean)) return nip05Cache.get(clean);
@@ -67,9 +61,7 @@ export async function resolveRecipient(input) {
             return pubkey;
           }
         }
-      } catch (err) {
-        // Silently bypass network/CORS blocks
-      }
+      } catch (err) {}
     }
   }
 
@@ -85,35 +77,15 @@ export async function resolveRecipient(input) {
 }
 
 export async function encryptEmail(senderSk, recipientPk, payloadObj, replyToId = null) {
-  // senderSk passed as Uint8Array needs conversion to hex for worker transmission
   const senderSkHex = bytesToHex(senderSk);
   return await runInWorker('encryptEmail', { senderSkHex, recipientPk, payloadObj, replyToId });
 }
 
-export function decryptEmail(recipientSk, giftWrapEvent) {
-  if (!verifyEvent(giftWrapEvent)) return null;
-
-  const wrapKey = nip44.v2.utils.getConversationKey(recipientSk, giftWrapEvent.pubkey);
-  const seal = JSON.parse(nip44.v2.decrypt(giftWrapEvent.content, wrapKey));
-  if (!verifyEvent(seal)) return null;
-
-  const sealKey = nip44.v2.utils.getConversationKey(recipientSk, seal.pubkey);
-  const rumor = JSON.parse(nip44.v2.decrypt(seal.content, sealKey));
-  const data = JSON.parse(rumor.content);
-  const replyTag = rumor.tags.find(t => t[0] === 'e');
-
-  return {
-    id: giftWrapEvent.id,
-    from: seal.pubkey,
-    subject: data.subject,
-    body: data.body,
-    senderHandle: data.senderHandle || null,
-    replyTo: replyTag ? replyTag[1] : null,
-    time: rumor.created_at * 1000,
-  };
+export async function decryptEmail(recipientSk, giftWrapEvent) {
+  const recipientSkHex = bytesToHex(recipientSk);
+  return await runInWorker('decryptEmail', { recipientSkHex, giftWrapEvent });
 }
 
-// Helper for bytesToHex since worker handles serialization
 function bytesToHex(bytes) {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
