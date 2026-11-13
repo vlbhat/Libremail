@@ -20,11 +20,19 @@ export function subscribeToInbox({ primaryRelay, mySecretKey, myPublicKey, onNew
   activeSub = pool.subscribeMany(relays, [{ kinds: [1059], '#p': [myPublicKey], since: threeDaysAgo }], {
     async onevent(giftWrapEvent) {
       try {
+        console.log("📥 Incoming gift wrap detected from relay:", giftWrapEvent);
+        
         // Await asynchronous decryption via Web Worker
         const decrypted = await decryptEmail(mySecretKey, giftWrapEvent);
-        if (decrypted) onNewEmail(decrypted);
-      } catch {
-        // Ignore non-matching or malformed events
+        console.log("🔓 Decryption result:", decrypted);
+
+        if (decrypted) {
+          onNewEmail(decrypted);
+        } else {
+          console.warn("⚠️ Decryption returned null. The event might not be addressed to this secret key.");
+        }
+      } catch (err) {
+        console.error("❌ Critical error during decryption in worker:", err);
       }
     },
     oneose() {
