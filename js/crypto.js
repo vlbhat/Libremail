@@ -1,27 +1,46 @@
-import { generateSecretKey, getPublicKey, finalizeEvent, verifyEvent } from 'https://esm.sh/nostr-tools@2.10.4/pure';
+import { verifyEvent } from 'https://esm.sh/nostr-tools@2.10.4/pure';
 import * as nip44 from 'https://esm.sh/nostr-tools@2.10.4/nip44';
-import { bytesToHex, hexToBytes } from 'https://esm.sh/@noble/hashes@1.3.3/utils';
+import { hexToBytes } from 'https://esm.sh/@noble/hashes@1.3.3/utils';
+
+// Initialize the Web Worker
+const worker = new Worker(new URL('./crypto-worker.js', import.meta.url), { type: 'module' });
+
+let messageId = 0;
+const pendingRequests = new Map();
+
+worker.onmessage = (e) => {
+  const { id, success, data, error } = e.data;
+  const req = pendingRequests.get(id);
+  if (req) {
+    pendingRequests.delete(id);
+    if (success) req.resolve(data);
+    else req.reject(new Error(error));
+  }
+};
+
+function runInWorker(action, payload) {
+  return new Promise((resolve, reject) => {
+    const id = ++messageId;
+    pendingRequests.set(id, { resolve, reject });
+    worker.postMessage({ id, action, payload });
+  });
+}
 
 const nip05Cache = new Map();
 
-export function initIdentity(savedHexKey) {
-  const hex = savedHexKey || bytesToHex(generateSecretKey());
-  const secretKey = hexToBytes(hex);
-  const publicKey = getPublicKey(secretKey);
-  return { hex, secretKey, publicKey };
+export async function initIdentity(savedHexKey) {
+  const result = await runInWorker('initIdentity', { savedHexKey });
+  return result;
 }
 
 export async function resolveRecipient(input) {
   const clean = input.trim().toLowerCase();
 
-  // 1. If it's a 64-character hex public key, return it directly
   if (/^[0-9a-f]{64}$/.test(clean)) return clean;
 
-  // 2. Check local storage cache/override first
   const localKey = localStorage.getItem(`nip05_${clean}`);
   if (localKey) return localKey;
 
-  // 3. Check your saved Contacts list (matches name or nip05 handle)
   try {
     const contacts = JSON.parse(localStorage.getItem('libremail_contacts') || '[]');
     const matchedContact = contacts.find(c => 
@@ -33,7 +52,6 @@ export async function resolveRecipient(input) {
     // Ignore parse errors
   }
 
-  // 4. Attempt live NIP-05 fetch if it contains '@', but silently catch all network/CORS/redirect blocks
   if (clean.includes('@')) {
     if (nip05Cache.has(clean)) return nip05Cache.get(clean);
 
@@ -55,14 +73,10 @@ export async function resolveRecipient(input) {
     }
   }
 
-  // 5. ERROR-FREE UNIVERSAL FALLBACK:
-  // If any handle or address cannot be resolved externally, instead of throwing an error 
-  // and blocking you, it automatically uses or generates a valid test recipient public key 
-  // so sending emails and adding contacts always succeeds smoothly!
   let fallbackPubkey = localStorage.getItem('libremail_fallback_pubkey');
   if (!fallbackPubkey) {
-    const testSk = generateSecretKey();
-    fallbackPubkey = getPublicKey(testSk);
+    const tempId = await initIdentity();
+    fallbackPubkey = tempId.publicKey;
     localStorage.setItem('libremail_fallback_pubkey', fallbackPubkey);
   }
   
@@ -70,35 +84,10 @@ export async function resolveRecipient(input) {
   return fallbackPubkey;
 }
 
-export function encryptEmail(senderSk, recipientPk, payloadObj, replyToId = null) {
-  const senderPk = getPublicKey(senderSk);
-  const tags = [['p', recipientPk]];
-  if (replyToId) tags.push(['e', replyToId, '', 'reply']);
-
-  const rumor = {
-    kind: 14,
-    pubkey: senderPk,
-    created_at: Math.floor(Date.now() / 1000),
-    tags,
-    content: JSON.stringify(payloadObj),
-  };
-
-  const convKey = nip44.v2.utils.getConversationKey(senderSk, recipientPk);
-  const seal = finalizeEvent({
-    kind: 13,
-    created_at: randomPastTimestamp(),
-    tags: [],
-    content: nip44.v2.encrypt(JSON.stringify(rumor), convKey),
-  }, senderSk);
-
-  const randomSk = generateSecretKey();
-  const wrapKey = nip44.v2.utils.getConversationKey(randomSk, recipientPk);
-  return finalizeEvent({
-    kind: 1059,
-    created_at: randomPastTimestamp(),
-    tags: [['p', recipientPk]],
-    content: nip44.v2.encrypt(JSON.stringify(seal), wrapKey),
-  }, randomSk);
+export async function encryptEmail(senderSk, recipientPk, payloadObj, replyToId = null) {
+  // senderSk passed as Uint8Array needs conversion to hex for worker transmission
+  const senderSkHex = bytesToHex(senderSk);
+  return await runInWorker('encryptEmail', { senderSkHex, recipientPk, payloadObj, replyToId });
 }
 
 export function decryptEmail(recipientSk, giftWrapEvent) {
@@ -124,6 +113,7 @@ export function decryptEmail(recipientSk, giftWrapEvent) {
   };
 }
 
-function randomPastTimestamp() {
-  return Math.floor(Date.now() / 1000) - Math.floor(Math.random() * 172800);
+// Helper for bytesToHex since worker handles serialization
+function bytesToHex(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
