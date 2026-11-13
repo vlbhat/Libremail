@@ -4,7 +4,8 @@ import { publishToRelays, subscribeToInbox } from './network.js';
 import { ui } from './ui.js';
 
 store.init();
-const identity = initIdentity(store.getSecretKey());
+// Updated for Web Worker: initIdentity is now asynchronous
+const identity = await initIdentity(store.getSecretKey());
 store.setSecretKey(identity.hex);
 
 document.getElementById('custom-relay').value = store.relayUrl;
@@ -141,7 +142,8 @@ document.getElementById('send-btn').onclick = async () => {
     const recipientPk = await resolveRecipient(rawTo);
     const myHandle = localStorage.getItem('libremail_handle') || `${identity.publicKey.slice(0, 6)}...@...${identity.publicKey.slice(-4)}`;
 
-    const giftWrap = encryptEmail(identity.secretKey, recipientPk, { 
+    // Updated for Web Worker: encryptEmail is now asynchronous
+    const giftWrap = await encryptEmail(identity.secretKey, recipientPk, { 
       subject, 
       body, 
       senderHandle: myHandle 
