@@ -15,6 +15,14 @@ export const store = {
     }
   },
 
+  getSecretKey() {
+    return localStorage.getItem('libremail_sk');
+  },
+
+  setSecretKey(hex) {
+    localStorage.setItem('libremail_sk', hex);
+  },
+
   saveEmails() {
     localStorage.setItem('libremail_emails', JSON.stringify(this.emails));
   },
@@ -31,14 +39,10 @@ export const store = {
   },
 
   addEmail(msg) {
-    // Check if email with this ID already exists
     const existingIndex = this.emails.findIndex(m => m.id === msg.id);
     if (existingIndex !== -1) {
-      // If it already exists, do not overwrite user folder actions (like Trash)
       return false; 
     }
-    
-    // New incoming/sent email
     this.emails.unshift(msg);
     this.saveEmails();
     return true;
