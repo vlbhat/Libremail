@@ -84,9 +84,16 @@ export const store = {
   },
 
   formatAddress(pubkey) {
+    // 1. Check if it's saved in your Contacts list
     const found = this.contacts.find(c => c.pubkey === pubkey);
-    if (found) return `${found.name} (${found.nip05 || pubkey.slice(0, 8) + '...'})`;
-    return `${pubkey.slice(0, 14)}...`;
+    if (found) return found.nip05 || found.name;
+
+    // 2. Check if a human-readable handle was received or saved for this pubkey
+    const storedHandle = localStorage.getItem(`handle_${pubkey}`);
+    if (storedHandle) return storedHandle;
+
+    // 3. Fallback: Masked secure view instead of raw exposed hex keys
+    return `${pubkey.slice(0, 6)}...@...${pubkey.slice(-4)}`;
   },
 
   scheduleSave() {
