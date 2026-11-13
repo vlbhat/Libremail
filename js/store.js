@@ -38,6 +38,25 @@ export const store = {
     }
   },
 
+  // Added missing getFilteredEmails method required by ui.js
+  getFilteredEmails(folder, searchQuery = '') {
+    this.currentFolder = folder;
+    const query = searchQuery.toLowerCase().trim();
+
+    return this.emails.filter(msg => {
+      // Folder matching rule
+      const matchesFolder = folder === 'starred' ? msg.starred : (msg.folder === folder);
+      if (!matchesFolder) return false;
+
+      // Search query filtering rule
+      if (!query) return true;
+      const matchSubject = (msg.subject || '').toLowerCase().includes(query);
+      const matchBody = (msg.body || '').toLowerCase().includes(query);
+      const matchSender = (msg.senderHandle || msg.from || '').toLowerCase().includes(query);
+      return matchSubject || matchBody || matchSender;
+    });
+  },
+
   addEmail(msg) {
     const existingIndex = this.emails.findIndex(m => m.id === msg.id);
     if (existingIndex !== -1) {
