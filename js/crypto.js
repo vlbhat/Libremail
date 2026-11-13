@@ -14,7 +14,7 @@ export function initIdentity(savedHexKey) {
 export async function resolveRecipient(input) {
   const clean = input.trim().toLowerCase();
 
-  // 1. If it's a 64-character hex public key, return it directly
+  // 1. If it's already a 64-character hex public key, return it directly
   if (/^[0-9a-f]{64}$/.test(clean)) return clean;
 
   // 2. If it's a handle containing '@'
@@ -36,17 +36,32 @@ export async function resolveRecipient(input) {
         }
       }
     } catch (err) {
-      console.warn(`Network fetch failed for ${domain}, checking local storage fallback...`);
+      console.warn(`Network fetch failed for ${domain}, checking fallbacks...`);
     }
 
-    // Fallback: Check if a local mapping exists in localStorage (e.g. nip05_alice@vercel.app)
+    // Fallback A: Check if a local mapping exists in localStorage (e.g. nip05_alice@vercel.app)
     const localKey = localStorage.getItem(`nip05_${clean}`);
     if (localKey) {
       nip05Cache.set(clean, localKey);
       return localKey;
     }
 
-    throw new Error(`Could not resolve "${clean}". Domain unreachable or handle not registered.`);
+    // Fallback B: Check if this handle or name matches anyone saved in your Contacts list
+    try {
+      const contacts = JSON.parse(localStorage.getItem('libremail_contacts') || '[]');
+      const matchedContact = contacts.find(c => 
+        c.name.toLowerCase() === clean || 
+        (c.nip05 && c.nip05.toLowerCase() === clean)
+      );
+      if (matchedContact) {
+        nip05Cache.set(clean, matchedContact.pubkey);
+        return matchedContact.pubkey;
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+
+    throw new Error(`Could not resolve "${clean}". Add them to your Contacts or check the address.`);
   }
 
   throw new Error('Enter a valid 64-character public key or user@domain.com address.');
