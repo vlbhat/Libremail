@@ -6,63 +6,98 @@ export const store = {
 
   init() {
     try {
-      this.emails = JSON.parse(localStorage.getItem('libremail_emails') || '[]');
-      this.contacts = JSON.parse(localStorage.getItem('libremail_contacts') || '[]');
-      this.relayUrl = localStorage.getItem('libremail_relay') || 'wss://relay.primal.net';
+      const savedEmails = JSON.parse(localStorage.getItem('libremail_emails') || '[]');
+      const savedContacts = JSON.parse(localStorage.getItem('libremail_contacts') || '[]');
+      const savedRelay = localStorage.getItem('libremail_relay');
+
+      this.emails = Array.isArray(savedEmails) ? savedEmails : [];
+      this.contacts = Array.isArray(savedContacts) ? savedContacts : [];
+      this.relayUrl = savedRelay || 'wss://relay.primal.net';
     } catch (e) {
       this.emails = [];
       this.contacts = [];
+      this.relayUrl = 'wss://relay.primal.net';
     }
   },
 
   getSecretKey() {
-    return localStorage.getItem('libremail_sk');
-  },
-
-  setSecretKey(hex) {
-    localStorage.setItem('libremail_sk', hex);
-  },
-
-  saveEmails() {
-    localStorage.setItem('libremail_emails', JSON.stringify(this.emails));
-  },
-
-  saveContacts() {
-    localStorage.setItem('libremail_contacts', JSON.stringify(this.contacts));
-  },
-
-  setRelayUrl(url) {
-    if (url) {
-      this.relayUrl = url;
-      localStorage.setItem('libremail_relay', url);
+    try {
+      return localStorage.getItem('libremail_sk');
+    } catch (e) {
+      return null;
     }
   },
 
-  // Fully robust filtered emails method matching all UI calls
-  getFilteredEmails(folder = this.currentFolder, searchQuery = '') {
-    this.currentFolder = folder || 'inbox';
-    const query = (searchQuery || '').toLowerCase().trim();
+  setSecretKey(hex) {
+    if (!hex || typeof hex !== 'string') return;
+    try {
+      localStorage.setItem('libremail_sk', hex);
+    } catch (e) {
+      console.warn('Could not save secret key:', e);
+    }
+  },
+
+  saveEmails() {
+    try {
+      localStorage.setItem('libremail_emails', JSON.stringify(this.emails));
+    } catch (e) {
+      console.warn('Could not save emails:', e);
+    }
+  },
+
+  saveContacts() {
+    try {
+      localStorage.setItem('libremail_contacts', JSON.stringify(this.contacts));
+    } catch (e) {
+      console.warn('Could not save contacts:', e);
+    }
+  },
+
+  setRelayUrl(url) {
+    if (!url || typeof url !== 'string') return;
+    this.relayUrl = url;
+    try {
+      localStorage.setItem('libremail_relay', url);
+    } catch (e) {
+      console.warn('Could not save relay URL:', e);
+    }
+  },
+
+  formatAddress(pubkey, maxLength = 14) {
+    if (!pubkey) return 'Unknown';
+    const key = String(pubkey);
+    if (key.length <= maxLength) return key;
+    return `${key.slice(0, maxLength)}...${key.slice(-6)}`;
+  },
+
+  getFilteredEmails(searchQuery = '', folder = this.currentFolder) {
+    const activeFolder = folder || this.currentFolder || 'inbox';
+    const query = String(searchQuery || '').toLowerCase().trim();
 
     return this.emails.filter(msg => {
-      // Default folder assignment for older stored messages if missing
-      const msgFolder = msg.folder || 'inbox';
-      const matchesFolder = folder === 'starred' ? msg.starred : (msgFolder === folder);
-      if (!matchesFolder) return false;
+      const item = msg || {};
+      const msgFolder = item.folder || 'inbox';
+      const matchesFolder = activeFolder === 'starred'
+        ? Boolean(item.starred)
+        : msgFolder === activeFolder;
 
-      // Search query filtering rule
+      if (!matchesFolder) return false;
       if (!query) return true;
-      const matchSubject = (msg.subject || '').toLowerCase().includes(query);
-      const matchBody = (msg.body || '').toLowerCase().includes(query);
-      const matchSender = (msg.senderHandle || msg.from || '').toLowerCase().includes(query);
-      return matchSubject || matchBody || matchSender;
+
+      const subject = String(item.subject || '').toLowerCase();
+      const body = String(item.body || '').toLowerCase();
+      const sender = String(item.senderHandle || item.from || '').toLowerCase();
+
+      return subject.includes(query) || body.includes(query) || sender.includes(query);
     });
   },
 
   addEmail(msg) {
+    if (!msg || !msg.id) return false;
+
     const existingIndex = this.emails.findIndex(m => m.id === msg.id);
-    if (existingIndex !== -1) {
-      return false; 
-    }
+    if (existingIndex !== -1) return false;
+
     this.emails.unshift(msg);
     this.saveEmails();
     return true;
@@ -100,12 +135,16 @@ export const store = {
   },
 
   addContact(contact) {
+    if (!contact || !contact.pubkey) return false;
     this.contacts.push(contact);
     this.saveContacts();
+    return true;
   },
 
   removeContact(index) {
+    if (index < 0 || index >= this.contacts.length) return false;
     this.contacts.splice(index, 1);
     this.saveContacts();
+    return true;
   }
 };
