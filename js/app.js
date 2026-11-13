@@ -176,7 +176,8 @@ function connectNetwork() {
       const inboxMsg = { ...decrypted, folder: 'inbox', to: identity.publicKey, starred: false };
       if (store.addEmail(inboxMsg)) {
         ui.updateInboxBadge();
-        ui.prependEmailRow(inboxMsg, identity.publicKey);
+        // Instantly re-render active folder view to show the incoming email live
+        ui.switchView(store.currentFolder, identity.publicKey);
       }
     },
     onConnected(relay) {
