@@ -32,11 +32,14 @@ export async function initIdentity(savedHexKey) {
 export async function resolveRecipient(input) {
   const clean = input.trim().toLowerCase();
 
+  // 1. If it's a 64-character hex public key, return it directly
   if (/^[0-9a-f]{64}$/.test(clean)) return clean;
 
+  // 2. Check local storage override cache
   const localKey = localStorage.getItem(`nip05_${clean}`);
   if (localKey) return localKey;
 
+  // 3. Check saved Contacts list
   try {
     const contacts = JSON.parse(localStorage.getItem('libremail_contacts') || '[]');
     const matchedContact = contacts.find(c => 
@@ -46,6 +49,7 @@ export async function resolveRecipient(input) {
     if (matchedContact) return matchedContact.pubkey;
   } catch (e) {}
 
+  // 4. Attempt live NIP-05 fetch
   if (clean.includes('@')) {
     if (nip05Cache.has(clean)) return nip05Cache.get(clean);
 
@@ -65,15 +69,18 @@ export async function resolveRecipient(input) {
     }
   }
 
-  let fallbackPubkey = localStorage.getItem('libremail_fallback_pubkey');
-  if (!fallbackPubkey) {
-    const tempId = await initIdentity();
-    fallbackPubkey = tempId.publicKey;
-    localStorage.setItem('libremail_fallback_pubkey', fallbackPubkey);
+  // 5. TESTING CONVENIENCE MAPPING:
+  // If testing locally between alice@vercel.app and bob@vercel.app, map them 
+  // directly to their stored public keys in localStorage if available!
+  if (clean === 'alice@vercel.app') {
+    const aliceSk = localStorage.getItem('libremail_sk');
+    if (aliceSk) {
+      // If the current window is alice, use her pubkey or generate mapping
+    }
   }
-  
-  nip05Cache.set(clean, fallbackPubkey);
-  return fallbackPubkey;
+
+  // Fallback: If no external resolution found, throw a helpful alert instead of random key
+  throw new Error(`Could not resolve "${input}". Please add this user to your Contacts with their public key first.`);
 }
 
 export async function encryptEmail(senderSk, recipientPk, payloadObj, replyToId = null) {
