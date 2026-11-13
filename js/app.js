@@ -190,3 +190,8 @@ ui.updateInboxBadge();
 ui.renderAutocomplete();
 ui.switchView('inbox', identity.publicKey);
 connectNetwork();
+
+// Expose modules globally for easy F12 console debugging
+window.store = store;
+window.ui = ui;
+window.identity = identity;
