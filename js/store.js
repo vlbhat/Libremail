@@ -38,14 +38,15 @@ export const store = {
     }
   },
 
-  // Added missing getFilteredEmails method required by ui.js
-  getFilteredEmails(folder, searchQuery = '') {
-    this.currentFolder = folder;
-    const query = searchQuery.toLowerCase().trim();
+  // Fully robust filtered emails method matching all UI calls
+  getFilteredEmails(folder = this.currentFolder, searchQuery = '') {
+    this.currentFolder = folder || 'inbox';
+    const query = (searchQuery || '').toLowerCase().trim();
 
     return this.emails.filter(msg => {
-      // Folder matching rule
-      const matchesFolder = folder === 'starred' ? msg.starred : (msg.folder === folder);
+      // Default folder assignment for older stored messages if missing
+      const msgFolder = msg.folder || 'inbox';
+      const matchesFolder = folder === 'starred' ? msg.starred : (msgFolder === folder);
       if (!matchesFolder) return false;
 
       // Search query filtering rule
