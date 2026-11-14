@@ -1,5 +1,7 @@
 import { hexToBytes } from 'https://esm.sh/@noble/hashes@1.3.3/utils';
 
+const HEX_64 = /^[0-9a-f]{64}$/i;
+
 const worker = new Worker(new URL('./crypto-worker.js', import.meta.url), { type: 'module' });
 
 let messageId = 0;
@@ -25,8 +27,15 @@ function runInWorker(action, payload) {
 
 const nip05Cache = new Map();
 
+export function isValidHex64(value) {
+  return typeof value === 'string' && HEX_64.test(value.trim());
+}
+
 export async function initIdentity(savedHexKey) {
-  return await runInWorker('initIdentity', { savedHexKey });
+  const candidate = typeof savedHexKey === 'string' && HEX_64.test(savedHexKey.trim())
+    ? savedHexKey.trim().toLowerCase()
+    : null;
+  return await runInWorker('initIdentity', { savedHexKey: candidate });
 }
 
 export async function resolveRecipient(input) {
@@ -39,10 +48,10 @@ export async function resolveRecipient(input) {
     throw new Error('Recipient address is required.');
   }
 
-  if (/^[0-9a-f]{64}$/.test(clean)) return clean;
+  if (HEX_64.test(clean)) return clean;
 
   const localKey = localStorage.getItem(`nip05_${clean}`);
-  if (localKey) return localKey;
+  if (localKey && HEX_64.test(localKey.trim())) return localKey.trim().toLowerCase();
 
   try {
     const contacts = JSON.parse(localStorage.getItem('libremail_contacts') || '[]');
@@ -50,22 +59,25 @@ export async function resolveRecipient(input) {
       (c && typeof c.name === 'string' && c.name.toLowerCase() === clean) ||
       (c && typeof c.nip05 === 'string' && c.nip05.toLowerCase() === clean)
     );
-    if (matchedContact?.pubkey) return matchedContact.pubkey;
+    if (matchedContact?.pubkey && HEX_64.test(matchedContact.pubkey.trim())) {
+      return matchedContact.pubkey.trim().toLowerCase();
+    }
   } catch (e) {}
 
   if (clean.includes('@')) {
     if (nip05Cache.has(clean)) return nip05Cache.get(clean);
 
     const [name, domain] = clean.split('@');
-    if (name && domain) {
+    if (name && domain && /^[a-z0-9.-]+\.[a-z]{2,63}$/i.test(domain)) {
       try {
         const res = await fetch(`https://${domain}/.well-known/nostr.json?name=${encodeURIComponent(name)}`);
         if (res.ok) {
           const data = await res.json();
           const pubkey = data.names?.[name];
-          if (pubkey) {
-            nip05Cache.set(clean, pubkey);
-            return pubkey;
+          if (pubkey && HEX_64.test(pubkey.trim())) {
+            const normalized = pubkey.trim().toLowerCase();
+            nip05Cache.set(clean, normalized);
+            return normalized;
           }
         }
       } catch (err) {}
@@ -76,11 +88,11 @@ export async function resolveRecipient(input) {
 }
 
 export async function encryptEmail(senderSk, recipientPk, payloadObj, replyToId = null) {
-  if (!senderSk || !recipientPk) {
-    throw new Error('Missing sender or recipient key material.');
+  if (!senderSk || !recipientPk || !HEX_64.test(String(recipientPk).trim())) {
+    throw new Error('Missing or invalid sender/recipient key material.');
   }
   const senderSkHex = bytesToHex(senderSk);
-  return await runInWorker('encryptEmail', { senderSkHex, recipientPk, payloadObj, replyToId });
+  return await runInWorker('encryptEmail', { senderSkHex, recipientPk: String(recipientPk).trim().toLowerCase(), payloadObj, replyToId });
 }
 
 export async function decryptEmail(recipientSk, giftWrapEvent) {

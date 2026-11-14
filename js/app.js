@@ -3,13 +3,18 @@ import { store } from './store.js';
 import { publishToRelays, subscribeToInbox } from './network.js';
 import { ui } from './ui.js';
 
+const VALID_RELAY = /^wss?:\/\//i;
+
+function isValidRelayUrl(value) {
+  return typeof value === 'string' && VALID_RELAY.test(value.trim());
+}
+
 store.init();
 const identity = await initIdentity(store.getSecretKey());
 store.setSecretKey(identity.hex);
 
 document.getElementById('custom-relay').value = store.relayUrl;
 
-// Header: Display saved human-readable handle or fallback to truncated public key
 const addressSpan = document.getElementById('my-address-short');
 const updateHeaderDisplay = () => {
   const currentHandle = localStorage.getItem('libremail_handle') || '';
@@ -17,7 +22,6 @@ const updateHeaderDisplay = () => {
 };
 updateHeaderDisplay();
 
-// Tapping the profile pill instantly copies your full public key to the clipboard
 document.getElementById('copy-address-btn').onclick = async () => {
   try {
     await navigator.clipboard.writeText(identity.publicKey);
@@ -29,7 +33,13 @@ document.getElementById('copy-address-btn').onclick = async () => {
 };
 
 document.getElementById('save-relay-btn').onclick = () => {
-  store.setRelayUrl(document.getElementById('custom-relay').value.trim());
+  const relayUrl = document.getElementById('custom-relay').value.trim();
+  if (!isValidRelayUrl(relayUrl)) {
+    ui.setStatus('Invalid relay URL');
+    alert('Please enter a valid relay URL starting with ws:// or wss://');
+    return;
+  }
+  store.setRelayUrl(relayUrl);
   connectNetwork();
 };
 
@@ -41,7 +51,6 @@ document.querySelectorAll('.nav-item').forEach(item => {
   item.onclick = () => ui.switchView(item.dataset.folder, identity.publicKey);
 });
 
-// Contacts Management
 document.getElementById('add-contact-btn').onclick = async () => {
   const name = document.getElementById('contact-name').value.trim();
   const rawAddress = document.getElementById('contact-address').value.trim();
@@ -73,7 +82,6 @@ document.getElementById('contacts-list').onclick = (e) => {
   }
 };
 
-// Mail List Interactions (Incremental Star Toggle + Reader + Trash Handlers)
 document.getElementById('mail-list').onclick = (e) => {
   const starId = e.target.dataset.star;
   if (starId) {
@@ -116,7 +124,6 @@ document.getElementById('mail-list').onclick = (e) => {
   });
 };
 
-// Send Encrypted Email
 document.getElementById('send-btn').onclick = async () => {
   const rawTo = document.getElementById('to-input').value.trim();
   const subject = document.getElementById('sub-input').value || '(No Subject)';
@@ -136,6 +143,9 @@ document.getElementById('send-btn').onclick = async () => {
       senderHandle: myHandle 
     }, replyId);
     
+    if (!isValidRelayUrl(store.relayUrl)) {
+      throw new Error('A valid relay URL is required before sending.');
+    }
     await publishToRelays(store.relayUrl, giftWrap);
 
     const sentMsg = {
@@ -161,11 +171,16 @@ document.getElementById('send-btn').onclick = async () => {
   }
 };
 
-// Network Subscription
 function connectNetwork() {
-  ui.setStatus(`Connecting to ${store.relayUrl}...`);
+  const relayUrl = store.relayUrl;
+  if (!isValidRelayUrl(relayUrl)) {
+    ui.setStatus('Invalid relay URL');
+    return;
+  }
+
+  ui.setStatus(`Connecting to ${relayUrl}...`);
   subscribeToInbox({
-    primaryRelay: store.relayUrl,
+    primaryRelay: relayUrl,
     mySecretKey: identity.secretKey,
     myPublicKey: identity.publicKey,
     onNewEmail(decrypted) {
@@ -176,7 +191,6 @@ function connectNetwork() {
       const inboxMsg = { ...decrypted, folder: 'inbox', to: identity.publicKey, starred: false };
       if (store.addEmail(inboxMsg)) {
         ui.updateInboxBadge();
-        // Instantly re-render active folder view to show the incoming email live
         ui.switchView(store.currentFolder, identity.publicKey);
       }
     },
@@ -191,7 +205,6 @@ ui.renderAutocomplete();
 ui.switchView('inbox', identity.publicKey);
 connectNetwork();
 
-// Expose modules globally for easy F12 console debugging
 window.store = store;
 window.ui = ui;
 window.identity = identity;
