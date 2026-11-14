@@ -9,6 +9,19 @@ function isValidRelayUrl(value) {
   return typeof value === 'string' && VALID_RELAY.test(value.trim());
 }
 
+function makeKeyboardButton(element, label) {
+  if (!element) return;
+  element.setAttribute('role', 'button');
+  element.setAttribute('tabindex', '0');
+  element.setAttribute('aria-label', label);
+  element.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      element.click();
+    }
+  });
+}
+
 store.init();
 const identity = await initIdentity(store.getSecretKey());
 store.setSecretKey(identity.hex);
@@ -21,6 +34,9 @@ const updateHeaderDisplay = () => {
   addressSpan.textContent = currentHandle || `${identity.publicKey.slice(0, 10)}...${identity.publicKey.slice(-6)}`;
 };
 updateHeaderDisplay();
+
+makeKeyboardButton(document.getElementById('copy-address-btn'), 'Copy your public key');
+makeKeyboardButton(document.getElementById('close-compose-btn'), 'Close compose window');
 
 document.getElementById('copy-address-btn').onclick = async () => {
   try {
@@ -48,7 +64,9 @@ document.getElementById('close-compose-btn').onclick = () => ui.closeCompose();
 document.getElementById('search-input').oninput = () => ui.renderMailList(identity.publicKey);
 
 document.querySelectorAll('.nav-item').forEach(item => {
-  item.onclick = () => ui.switchView(item.dataset.folder, identity.publicKey);
+  const folder = item.dataset.folder;
+  makeKeyboardButton(item, `Open ${folder} folder`);
+  item.onclick = () => ui.switchView(folder, identity.publicKey);
 });
 
 document.getElementById('add-contact-btn').onclick = async () => {
@@ -74,20 +92,26 @@ document.getElementById('add-contact-btn').onclick = async () => {
 };
 
 document.getElementById('contacts-list').onclick = (e) => {
-  if (e.target.dataset.emailTo) return ui.openCompose(e.target.dataset.emailTo);
-  if (e.target.dataset.deleteContact !== undefined) {
-    store.removeContact(Number(e.target.dataset.deleteContact));
+  const emailButton = e.target.closest('[data-email-to]');
+  if (emailButton) return ui.openCompose(emailButton.dataset.emailTo);
+  const deleteButton = e.target.closest('[data-delete-contact]');
+  if (deleteButton) {
+    store.removeContact(Number(deleteButton.dataset.deleteContact));
     ui.renderAutocomplete();
     ui.renderContactsList();
   }
 };
 
 document.getElementById('mail-list').onclick = (e) => {
-  const starId = e.target.dataset.star;
-  if (starId) {
+  const starButton = e.target.closest('[data-star]');
+  if (starButton) {
     e.stopPropagation();
-    const updated = store.toggleStar(starId);
-    if (updated) e.target.classList.toggle('starred', updated.starred);
+    const updated = store.toggleStar(starButton.dataset.star);
+    if (updated) {
+      starButton.classList.toggle('starred', updated.starred);
+      starButton.setAttribute('aria-pressed', String(updated.starred));
+      starButton.setAttribute('aria-label', updated.starred ? 'Unstar message' : 'Star message');
+    }
     return;
   }
 

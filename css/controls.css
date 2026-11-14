@@ -1,0 +1,74 @@
+/* Clear visual affordance and keyboard focus for interactive controls. */
+button,
+[role="button"] {
+  font: inherit;
+}
+
+button {
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.nav-item[role="button"] { user-select: none; }
+.nav-item[role="button"]:focus-visible,
+.account-pill[role="button"]:focus-visible,
+.close-btn[role="button"]:focus-visible {
+  outline-offset: 3px;
+}
+
+.star {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #9ca3af;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1.15rem;
+}
+.star:hover { background: #fef3c7; color: #b45309; }
+.star.starred { color: #f59e0b; }
+
+.action-btn {
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  color: #374151;
+  background: #fff;
+  cursor: pointer;
+}
+.action-btn:hover { background: #f3f4f6; border-color: #9ca3af; }
+.action-btn:active { background: #e5e7eb; }
+.danger-btn { color: #b91c1c; border-color: #fecaca; }
+.danger-btn:hover { background: #fef2f2; border-color: #f87171; }
+
+.contact-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.close-btn[role="button"] {
+  display: inline-flex;
+  min-width: 32px;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+.close-btn[role="button"]:hover { background: rgba(255,255,255,.15); }
+
+@media (max-width: 600px) {
+  .action-btn { min-height: 40px; }
+  .contact-actions { flex-wrap: wrap; justify-content: flex-end; }
+}

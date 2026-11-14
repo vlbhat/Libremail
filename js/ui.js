@@ -39,10 +39,11 @@ export const ui = {
     const timeStr = new Date(msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const subject = String(msg.subject || '(No Subject)').trim() || '(No Subject)';
     const body = String(msg.body || '').trim();
+    const starLabel = msg.starred ? 'Unstar message' : 'Star message';
 
     return `
-      <div class="mail-row" data-id="${msg.id}">
-        <span class="star ${msg.starred ? 'starred' : ''}" data-star="${msg.id}">★</span>
+      <div class="mail-row" data-id="${escapeHtml(msg.id)}">
+        <button type="button" class="star ${msg.starred ? 'starred' : ''}" data-star="${escapeHtml(msg.id)}" aria-label="${starLabel}" aria-pressed="${Boolean(msg.starred)}" title="${starLabel}">★</button>
         <div class="sender">${escapeHtml(label)}</div>
         <div class="snippet"><strong>${escapeHtml(subject)}</strong> — ${escapeHtml(body)}</div>
         <div class="time">${timeStr}</div>
@@ -83,19 +84,23 @@ export const ui = {
       return;
     }
 
-    container.innerHTML = store.contacts.map((c, index) => `
-      <div class="mail-row contact-row">
-        <div>
-          <strong>${escapeHtml(c && c.name ? c.name : 'Unknown')}</strong>
-          ${c && c.nip05 ? `<span class="nip05-badge">${escapeHtml(c.nip05)}</span>` : ''}
-          <div class="contact-key">${escapeHtml(c && c.pubkey ? c.pubkey : '')}</div>
+    container.innerHTML = store.contacts.map((c, index) => {
+      const name = c && c.name ? c.name : 'Unknown';
+      const pubkey = c && c.pubkey ? c.pubkey : '';
+      return `
+        <div class="mail-row contact-row">
+          <div>
+            <strong>${escapeHtml(name)}</strong>
+            ${c && c.nip05 ? `<span class="nip05-badge">${escapeHtml(c.nip05)}</span>` : ''}
+            <div class="contact-key">${escapeHtml(pubkey)}</div>
+          </div>
+          <div class="contact-actions">
+            <button type="button" class="action-btn" data-email-to="${escapeHtml(pubkey)}" title="Compose an email to ${escapeHtml(name)}">✉️ Mail</button>
+            <button type="button" class="action-btn" data-delete-contact="${index}" title="Remove ${escapeHtml(name)} from contacts">🗑️ Remove</button>
+          </div>
         </div>
-        <div>
-          <button class="action-btn" data-email-to="${escapeHtml(c && c.pubkey ? c.pubkey : '')}">✉️ Mail</button>
-          <button class="action-btn" data-delete-contact="${index}">🗑️ Remove</button>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   },
 
   openReader(msg, myPublicKey, handlers) {
@@ -114,7 +119,7 @@ export const ui = {
     readerEl.innerHTML = `
       <div class="reader-header">
         <div class="reader-subject">${escapeHtml(subjectText)}</div>
-        <button class="action-btn" id="back-btn">← Back</button>
+        <button type="button" class="action-btn" id="back-btn" title="Return to ${escapeHtml(store.currentFolder)}">← Back to ${escapeHtml(store.currentFolder)}</button>
       </div>
       <div class="reader-meta">
         <div><strong>From:</strong> ${escapeHtml(store.formatAddress(msg.from))}</div>
@@ -123,12 +128,12 @@ export const ui = {
       <div class="reader-body">${escapeHtml(String(msg.body || ''))}</div>
 
       ${isTrash ? `
-        <button class="action-btn" id="restore-btn">♻️ Restore to Inbox</button>
-        <button class="action-btn" id="perm-delete-btn" style="color: #d93025;">🗑️ Delete Forever</button>
+        <button type="button" class="action-btn" id="restore-btn" title="Move this message back to your inbox">♻️ Restore to Inbox</button>
+        <button type="button" class="action-btn danger-btn" id="perm-delete-btn" title="Permanently erase this message">🗑️ Delete Forever</button>
       ` : `
-        <button class="action-btn" id="reply-btn">↩ Reply</button>
-        ${!isSaved && msg.from !== myPublicKey ? `<button class="action-btn" id="save-sender-btn">➕ Save Sender</button>` : ''}
-        <button class="action-btn" id="trash-btn">🗑️ Delete</button>
+        <button type="button" class="action-btn" id="reply-btn" title="Reply to this sender">↩ Reply</button>
+        ${!isSaved && msg.from !== myPublicKey ? `<button type="button" class="action-btn" id="save-sender-btn" title="Save this sender to your contacts">➕ Save Sender</button>` : ''}
+        <button type="button" class="action-btn" id="trash-btn" title="Move this message to Trash">🗑️ Move to Trash</button>
       `}
     `;
 
@@ -154,7 +159,12 @@ export const ui = {
     const nextFolder = folder || 'inbox';
     store.currentFolder = nextFolder;
 
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.folder === nextFolder);
+      if (el.dataset.folder === nextFolder) el.setAttribute('aria-current', 'page');
+      else el.removeAttribute('aria-current');
+    });
+
     const navEl = document.getElementById(`nav-${nextFolder}`);
     if (navEl) navEl.classList.add('active');
 
@@ -170,11 +180,8 @@ export const ui = {
     const contactsView = document.getElementById('contacts-view');
     if (contactsView) contactsView.style.display = nextFolder === 'contacts' ? 'block' : 'none';
 
-    if (nextFolder === 'contacts') {
-      this.renderContactsList();
-    } else {
-      this.renderMailList(myPublicKey);
-    }
+    if (nextFolder === 'contacts') this.renderContactsList();
+    else this.renderMailList(myPublicKey);
   },
 
   openCompose(to = '', subject = '', replyId = '') {
@@ -189,10 +196,13 @@ export const ui = {
     if (replyIdInput) replyIdInput.value = replyId;
     if (composeTitle) composeTitle.textContent = replyId ? 'Reply Message' : 'New Message';
     if (composeModal) composeModal.style.display = 'flex';
+    if (toInput) toInput.focus();
   },
 
   closeCompose() {
     const composeModal = document.getElementById('compose-modal');
     if (composeModal) composeModal.style.display = 'none';
+    const composeButton = document.getElementById('compose-btn');
+    if (composeButton) composeButton.focus();
   }
 };
