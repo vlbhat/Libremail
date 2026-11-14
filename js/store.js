@@ -38,22 +38,48 @@ export const store = {
     }
   },
 
+  formatAddress(address = '') {
+    if (!address) return '';
+
+    if (address.includes('@')) {
+      const [localPart, domain] = address.split('@');
+      if (localPart && domain) {
+        return localPart.length > 12
+          ? `${localPart.slice(0, 8)}...@${domain}`
+          : address;
+      }
+    }
+
+    if (address.length <= 16) return address;
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  },
+
   // Fully robust filtered emails method matching all UI calls
   getFilteredEmails(folder = this.currentFolder, searchQuery = '') {
-    this.currentFolder = folder || 'inbox';
-    const query = (searchQuery || '').toLowerCase().trim();
+    let activeFolder = this.currentFolder;
+    let query = '';
+
+    if (typeof folder === 'string' && ['inbox', 'sent', 'trash', 'starred', 'contacts'].includes(folder)) {
+      activeFolder = folder;
+      query = typeof searchQuery === 'string' ? searchQuery : '';
+    } else {
+      query = typeof folder === 'string' ? folder : '';
+    }
+
+    this.currentFolder = activeFolder;
+    const normalizedQuery = query.toLowerCase().trim();
 
     return this.emails.filter(msg => {
       // Default folder assignment for older stored messages if missing
       const msgFolder = msg.folder || 'inbox';
-      const matchesFolder = folder === 'starred' ? msg.starred : (msgFolder === folder);
+      const matchesFolder = activeFolder === 'starred' ? msg.starred : (msgFolder === activeFolder);
       if (!matchesFolder) return false;
 
       // Search query filtering rule
-      if (!query) return true;
-      const matchSubject = (msg.subject || '').toLowerCase().includes(query);
-      const matchBody = (msg.body || '').toLowerCase().includes(query);
-      const matchSender = (msg.senderHandle || msg.from || '').toLowerCase().includes(query);
+      if (!normalizedQuery) return true;
+      const matchSubject = (msg.subject || '').toLowerCase().includes(normalizedQuery);
+      const matchBody = (msg.body || '').toLowerCase().includes(normalizedQuery);
+      const matchSender = (msg.senderHandle || msg.from || '').toLowerCase().includes(normalizedQuery);
       return matchSubject || matchBody || matchSender;
     });
   },
