@@ -1,4 +1,4 @@
-import { initIdentity, encryptEmail, resolveRecipient } from './crypto.js';
+import { initIdentity, encryptEmail, resolveRecipient, resolveNip05Address } from './crypto.js';
 import { store } from './store.js';
 import { publishToRelays, subscribeToInbox } from './network.js';
 import { ui } from './ui.js';
@@ -22,6 +22,15 @@ function makeKeyboardButton(element, label) {
   });
 }
 
+async function copyText(text, label) {
+  try {
+    await navigator.clipboard.writeText(text);
+    ui.setStatus(`${label} copied to clipboard.`);
+  } catch (error) {
+    window.prompt(`Copy ${label.toLowerCase()}:`, text);
+  }
+}
+
 store.init();
 const identity = await initIdentity(store.getSecretKey());
 store.setSecretKey(identity.hex);
@@ -29,22 +38,62 @@ store.setSecretKey(identity.hex);
 document.getElementById('custom-relay').value = store.relayUrl;
 
 const addressSpan = document.getElementById('my-address-short');
-const updateHeaderDisplay = () => {
-  const currentHandle = localStorage.getItem('libremail_handle') || '';
-  addressSpan.textContent = currentHandle || `${identity.publicKey.slice(0, 10)}...${identity.publicKey.slice(-6)}`;
-};
-updateHeaderDisplay();
+const myEmailInput = document.getElementById('my-email-input');
+const myEmailAddress = document.getElementById('my-email-address');
+const myEmailStatus = document.getElementById('my-email-status');
+
+function renderMyAddress() {
+  const email = localStorage.getItem('libremail_handle') || '';
+  if (myEmailInput) myEmailInput.value = email;
+  if (myEmailAddress) {
+    myEmailAddress.textContent = email || 'No verified email address set';
+  }
+  if (myEmailStatus) {
+    myEmailStatus.textContent = email
+      ? 'Verified against its domain’s NIP-05 record.'
+      : 'You can share either address. A NIP-05 address requires a domain you control to publish its public-key mapping.';
+  }
+  if (addressSpan) {
+    addressSpan.textContent = email || `${identity.publicKey.slice(0, 10)}...${identity.publicKey.slice(-6)}`;
+    addressSpan.title = email ? `NIP-05 address: ${email}` : 'No NIP-05 address set; public key shown.';
+  }
+}
+renderMyAddress();
 
 makeKeyboardButton(document.getElementById('copy-address-btn'), 'Copy your public key');
 makeKeyboardButton(document.getElementById('close-compose-btn'), 'Close compose window');
 
-document.getElementById('copy-address-btn').onclick = async () => {
+document.getElementById('copy-address-btn').onclick = () => copyText(identity.publicKey, 'Public key');
+
+document.getElementById('copy-email-btn').onclick = () => {
+  const email = localStorage.getItem('libremail_handle');
+  if (!email) {
+    ui.setStatus('Verify and save a NIP-05 address first.');
+    return;
+  }
+  return copyText(email, 'NIP-05 address');
+};
+
+document.getElementById('save-my-email-btn').onclick = async () => {
+  const address = myEmailInput?.value.trim().toLowerCase() || '';
+  if (!address) {
+    ui.setStatus('Enter a NIP-05 address first.');
+    return;
+  }
+
+  if (myEmailStatus) myEmailStatus.textContent = 'Checking the domain’s NIP-05 record…';
+  ui.setStatus('Verifying your NIP-05 address…');
   try {
-    await navigator.clipboard.writeText(identity.publicKey);
-    ui.setStatus('Public key copied to clipboard ✓');
-    alert(`Public key successfully copied to clipboard:\n\n${identity.publicKey}`);
-  } catch (err) {
-    prompt('Copy your public key below:', identity.publicKey);
+    const resolvedKey = await resolveNip05Address(address);
+    if (resolvedKey !== identity.publicKey.toLowerCase()) {
+      throw new Error('That NIP-05 address resolves to a different public key.');
+    }
+    localStorage.setItem('libremail_handle', address);
+    renderMyAddress();
+    ui.setStatus('Verified NIP-05 address saved ✓');
+  } catch (error) {
+    if (myEmailStatus) myEmailStatus.textContent = error.message;
+    ui.setStatus('Could not verify NIP-05 address');
   }
 };
 
@@ -138,7 +187,7 @@ document.getElementById('mail-list').onclick = (e) => {
         ui.switchView('trash', identity.publicKey);
       }
     },
-    onSaveSender: (pubkey, msgId) => {
+    onSaveSender: (pubkey) => {
       const nickname = prompt('Enter a nickname for this sender:');
       if (!nickname) return;
       store.addContact({ name: nickname.trim(), pubkey, nip05: '' });
@@ -154,12 +203,12 @@ document.getElementById('send-btn').onclick = async () => {
   const body = document.getElementById('body-input').value;
   const replyId = document.getElementById('reply-id-input').value || null;
 
-  if (!rawTo || !body) return alert('Recipient address and message body are required.');
+  if (!rawTo || !body.trim()) return alert('Recipient address and message body are required.');
 
   ui.setStatus('Resolving recipient & encrypting...');
   try {
     const recipientPk = await resolveRecipient(rawTo);
-    const myHandle = localStorage.getItem('libremail_handle') || `${identity.publicKey.slice(0, 6)}...@...${identity.publicKey.slice(-4)}`;
+    const myHandle = localStorage.getItem('libremail_handle') || identity.publicKey;
 
     const giftWrap = await encryptEmail(identity.secretKey, recipientPk, {
       subject,

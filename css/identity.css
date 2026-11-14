@@ -1,0 +1,53 @@
+/* Human-readable address controls */
+.identity-box {
+  padding: 12px;
+  margin: 4px 0 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+.identity-box h2 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+.identity-help,
+.identity-status {
+  color: #6b7280;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+.identity-box label {
+  display: block;
+  margin: 10px 0 4px;
+  color: #374151;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.identity-box input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+}
+.identity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.identity-address {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-top: 10px;
+  color: #1d4ed8;
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+.identity-box > .action-btn { width: 100%; margin-top: 4px; }
+.identity-box code { overflow-wrap: anywhere; }
+
+@media (max-width: 700px) {
+  .identity-help { display: none; }
+  .identity-box { max-height: 220px; overflow-y: auto; }
+}

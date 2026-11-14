@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>LibreMail — Decentralized Webmail</title>
-  <link rel="stylesheet" href="css/styles.css?v=2">
-  <link rel="stylesheet" href="css/controls.css?v=2">
+  <link rel="stylesheet" href="css/styles.css?v=3">
+  <link rel="stylesheet" href="css/controls.css?v=3">
 </head>
 <body>
   <header>
@@ -14,20 +14,37 @@
     <div class="search-bar">
       <input type="text" id="search-input" placeholder="Search encrypted mail..." aria-label="Search messages">
     </div>
-    <div class="account-pill" id="copy-address-btn" title="Copy your public key">
+    <button class="account-pill" id="copy-address-btn" type="button" title="Copy your public key" aria-label="Copy your public key">
       <span class="dot" aria-hidden="true"></span>
       <span id="my-address-short">Loading...</span> 📋
-    </div>
+    </button>
   </header>
 
   <div class="workspace">
     <aside aria-label="Mail navigation">
       <button class="compose-btn" id="compose-btn" type="button">✏️ Compose</button>
-      <div class="nav-item active" id="nav-inbox" data-folder="inbox"><span>📥 Inbox</span><span id="count-inbox">0</span></div>
-      <div class="nav-item" id="nav-starred" data-folder="starred"><span>⭐ Starred</span></div>
-      <div class="nav-item" id="nav-sent" data-folder="sent"><span>📤 Sent</span></div>
-      <div class="nav-item" id="nav-trash" data-folder="trash"><span>🗑️ Trash</span></div>
-      <div class="nav-item" id="nav-contacts" data-folder="contacts"><span>👥 Contacts</span></div>
+
+      <section class="identity-box" aria-labelledby="identity-heading">
+        <h2 id="identity-heading">Your email addresses</h2>
+        <p class="identity-help">Share either your public key or a verified NIP-05 address. A readable address like <code>name@example.com</code> requires a domain owner to publish the NIP-05 mapping to your key.</p>
+        <label for="my-email-input">Human-readable address</label>
+        <input id="my-email-input" type="email" autocomplete="email" placeholder="name@example.com">
+        <div class="identity-actions">
+          <button id="save-my-email-btn" type="button" class="action-btn">Verify and save</button>
+          <button id="copy-email-btn" type="button" class="action-btn" title="Copy verified NIP-05 address">Copy email ID</button>
+        </div>
+        <output id="my-email-address" class="identity-address">No verified email address set</output>
+        <p id="my-email-status" class="identity-status" aria-live="polite">A NIP-05 address needs a domain with a published public-key mapping.</p>
+        <button id="copy-public-key-btn" type="button" class="action-btn" title="Copy your full public key">Copy public key</button>
+      </section>
+
+      <nav aria-label="Mail folders">
+        <div class="nav-item active" id="nav-inbox" data-folder="inbox"><span>📥 Inbox</span><span id="count-inbox">0</span></div>
+        <div class="nav-item" id="nav-starred" data-folder="starred"><span>⭐ Starred</span></div>
+        <div class="nav-item" id="nav-sent" data-folder="sent"><span>📤 Sent</span></div>
+        <div class="nav-item" id="nav-trash" data-folder="trash"><span>🗑️ Trash</span></div>
+        <div class="nav-item" id="nav-contacts" data-folder="contacts"><span>👥 Contacts</span></div>
+      </nav>
 
       <div class="relay-box">
         <label for="custom-relay"><strong>Relay server</strong></label>
@@ -48,7 +65,7 @@
         <h2>Saved Contacts</h2>
         <div class="contacts-form">
           <input type="text" id="contact-name" placeholder="Nickname (e.g. Bob)" aria-label="Contact nickname">
-          <input type="text" id="contact-address" placeholder="Public key or user@domain.com" aria-label="Contact public key or NIP-05 address">
+          <input type="text" id="contact-address" placeholder="Public key or name@example.com" aria-label="Contact public key or NIP-05 address">
           <button class="send-btn" id="add-contact-btn" type="button">Add contact</button>
         </div>
         <div id="contacts-list"></div>
@@ -61,7 +78,7 @@
       <span id="compose-title">New Message</span>
       <button class="close-btn" id="close-compose-btn" type="button" aria-label="Close compose window" title="Close">✕</button>
     </div>
-    <input type="text" id="to-input" list="contact-suggestions" placeholder="To (public key, NIP-05 address, or contact)" aria-label="Recipient">
+    <input type="text" id="to-input" list="contact-suggestions" placeholder="Recipient public key, NIP-05 name@domain, or saved contact" aria-label="Recipient">
     <datalist id="contact-suggestions"></datalist>
     <input type="text" id="sub-input" placeholder="Subject" aria-label="Subject">
     <textarea id="body-input" rows="8" placeholder="Write your end-to-end encrypted email..." aria-label="Message body"></textarea>
@@ -72,6 +89,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=2"></script>
+  <script type="module" src="js/app.js?v=3"></script>
 </body>
 </html>
