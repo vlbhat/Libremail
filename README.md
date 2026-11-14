@@ -1,84 +1,100 @@
 # LibreMail
 
-A small browser-based messaging prototype built on Nostr relays. Messages are composed in the browser, wrapped as Nostr gift-wrap events, and published to a relay. The application stores its identity, contacts, and local mailbox in the browser.
+LibreMail is an experimental, browser-based messaging prototype that uses Nostr relays to send and receive encrypted messages. It provides a familiar inbox-style interface while using Nostr public keys for addressing.
 
-> **Prototype warning:** This repository is experimental. Do not use it for sensitive or production communications. The current implementation stores the private key and decrypted mailbox in `localStorage` without encryption, and has not had an independent security or protocol audit.
+> **Status: experimental.** LibreMail has not undergone an independent security review or a complete interoperability test against other Nostr clients. Do not use it for sensitive communications or with a private key that protects valuable assets.
 
-## Features
+## What it does
 
-- Generate and persist a Nostr keypair in the browser.
-- Send encrypted messages to a 64-character hexadecimal public key or a locally saved contact nickname.
-- Subscribe to a configured relay for incoming gift-wrap events.
-- Keep local inbox, sent mail, contacts, stars, and trash in browser storage.
-- Search and manage messages in the browser UI.
+- Creates or loads a Nostr identity in the browser.
+- Sends encrypted messages to a recipient's 64-character hexadecimal public key or a locally saved contact nickname.
+- Publishes wrapped message events to a configurable Nostr relay.
+- Subscribes to a relay for incoming wrapped messages.
+- Stores messages, contacts, and settings in the browser for the current site origin.
+- Provides inbox, sent, starred, trash, contacts, search, reply, and restore views.
+
+LibreMail is a prototype, not a conventional email service: it does not provide SMTP/IMAP, email accounts, or globally shared address books. A saved nickname is a local alias that only exists in that browser profile.
+
+## Try the hosted app
+
+The project lists this hosted deployment: <https://libremail.vercel.app/>. Availability and behavior depend on that deployment and the configured relay.
 
 ## Run locally
 
-The app uses JavaScript modules and a module Web Worker. Serve the repository over HTTP(S); opening `index.html` directly with a `file://` URL may prevent modules or the worker from loading.
+The app uses JavaScript modules and a module Web Worker. Serve the repository over HTTP or HTTPS; opening `index.html` directly with a `file://` URL may prevent modules and the worker from loading.
 
-For example, with Python installed:
+With Python 3 installed, run this from the repository root:
 
 ```sh
 python3 -m http.server 8000
 ```
 
-Then open <http://localhost:8000>.
+Then open <http://localhost:8000> in a modern browser.
 
-The app loads `nostr-tools` and `@noble/hashes` from `esm.sh`, so a network connection is required. The default relay is configured in `js/store.js`; you can enter another WebSocket relay in the UI.
+The app currently loads `nostr-tools` and `@noble/hashes` from `esm.sh`, so an internet connection is required. There is no package-install or build step in this prototype. The default relay is `wss://relay.primal.net`; you can enter a different WebSocket relay in the app.
 
-## Addressing
+## Addressing and contacts
 
-- **Public key:** Enter a 64-character hexadecimal Nostr public key.
-- **Saved contact:** Enter the contact nickname saved in this browser, or choose its public key from the recipient suggestions.
-- **NIP-05:** NIP-05 resolution is not currently enabled in the public-key-only UI. `well-known/nostr.json` is a deployment example containing a placeholder, not a valid identity record; replace it with a real public-key mapping before serving that path from a domain.
+Use one of these recipient forms:
 
-A nickname is only a local alias. It is not a globally routable email address, and contacts do not sync between browsers.
+1. **Public key:** the recipient's 64-character hexadecimal Nostr public key.
+2. **Saved contact nickname:** a nickname and public key saved in this browser. The compose suggestions contain the contact's public key.
 
-## Project layout
+NIP-05 lookup is not enabled in the current public-key-only recipient resolver. The `well-known/nostr.json` file is a placeholder/example, not a working address mapping. Do not publish it as a valid identity record without replacing the placeholder with a real public key and serving it from the relevant domain with suitable cross-origin access.
+
+## Project structure
 
 ```text
 .
-├── index.html              # App shell
+├── index.html              # App shell and controls
 ├── css/
 │   ├── styles.css          # Layout and visual styling
-│   └── controls.css        # Buttons, focus, and control states
+│   └── controls.css        # Control, hover, and focus styling
 ├── js/
-│   ├── app.js              # UI events and application orchestration
+│   ├── app.js              # Application startup and UI event handlers
 │   ├── crypto.js           # Crypto worker bridge and recipient resolution
-│   ├── crypto-worker.js    # Nostr signing, wrapping, and decryption
-│   ├── network.js          # Relay publish and inbox subscription
-│   ├── store.js            # Browser-persisted messages and contacts
-│   └── ui.js               # Rendering and interaction views
+│   ├── crypto-worker.js    # Key operations, signing, encryption, and decryption
+│   ├── network.js          # Relay publishing and inbox subscription
+│   ├── store.js            # Browser-persisted messages, contacts, and settings
+│   └── ui.js               # Mail, contact, and reader rendering
 └── well-known/
-    └── nostr.json          # Example NIP-05 response (placeholder only)
+    └── nostr.json          # Placeholder NIP-05 example; not enabled by default
 ```
 
-## Known limitations and audit notes
+## Data and security notes
 
-These are known risks found during a source review; they are not claims of a complete audit.
+Please read these limitations before using the app:
 
-1. **Private-key exposure:** `libremail_sk` is stored unencrypted in `localStorage`. Any script executing in the app origin can read it. Do not use a key that protects valuable funds or identity.
-2. **Decrypted mailbox exposure:** Messages and contacts are stored in plaintext in `localStorage`. Anyone with access to the browser profile or same-origin script access can read them.
-3. **Remote dependency trust:** Crypto code is imported at runtime from a CDN without a lockfile, integrity pin, or local vendoring. A changed or compromised upstream response can affect the app.
-4. **No automated test/build pipeline:** There is no package manifest or test suite in the current repository. Validate changes manually and add tests before relying on behavior.
-5. **No offline/history guarantee:** The subscription requests only the latest three days of gift-wrap events. Older messages not already stored locally may not be recovered.
-6. **Relay validation is basic:** A `ws://` or `wss://` prefix check does not fully validate a URL or guarantee that the relay is reachable or trustworthy.
-7. **Protocol interoperability is unverified:** The code uses Nostr kinds 14, 13, and 1059 with NIP-44 encryption, but there is no interoperability test suite confirming compatibility with independent NIP-17 clients. Treat the protocol label as unverified until tested.
-8. **Placeholder NIP-05 record:** `well-known/nostr.json` contains `YOUR_64_CHARACTER_PUBLIC_KEY_HERE`; it must not be presented as a working identity document.
-9. **Persistence failures are not consistently surfaced:** Browser storage can be unavailable or full; many storage writes currently have no user-facing recovery path.
-10. **Accessibility remains partial:** Some navigation items are clickable `div` elements rather than native buttons/links; keyboard and screen-reader behavior should be tested.
+- **Private key storage:** the secret key is stored in browser `localStorage` under `libremail_sk` in plaintext. Same-origin JavaScript, browser extensions with access, or someone with access to the browser profile may be able to read it. Do not use a valuable or reused key.
+- **Local mailbox storage:** decrypted messages, contacts, and settings are stored in plaintext in `localStorage`. Clearing site data removes this local mailbox; browser storage is not a backup or synchronized account.
+- **Relay metadata:** message contents are intended to be encrypted before publication, but relays can observe public event metadata such as event timing and routing tags. A relay may also refuse, delay, or delete events.
+- **Runtime dependencies:** cryptographic libraries are loaded from a third-party CDN at runtime. The current repository does not pin or vendor those fetched module contents.
+- **Transport and hosting:** use HTTPS in deployment. Do not expose private keys in logs, screenshots, issue reports, or committed files.
+- **Protocol compatibility:** the code constructs Nostr kinds 14, 13, and 1059 and uses NIP-44. Compatibility with independent implementations and the current NIP-17 specification has not been established by an automated interoperability suite. Treat protocol compliance as unverified.
+- **History retrieval:** the inbox subscription requests only the most recent three days from the selected relay. Messages not in local storage and older than that window may not appear.
+- **NIP-05 placeholder:** `well-known/nostr.json` contains a dummy key and is not a usable identity record.
 
-## Pre-release checklist
+This README is a project guide, not a security guarantee or a complete audit.
 
-- [ ] Replace or remove the placeholder `well-known/nostr.json` mapping.
-- [ ] Review the Nostr/NIP-17 message flow against the current specifications and test against independent clients.
-- [ ] Move private-key custody out of unencrypted `localStorage` or clearly require a disposable key.
-- [ ] Encrypt local mailbox data or document the local-device exposure prominently in the UI.
-- [ ] Pin and audit runtime dependencies; consider vendoring critical crypto dependencies.
-- [ ] Add automated tests for recipient resolution, send/decrypt round trips, filtering, trash, and relay errors.
-- [ ] Test responsive layout, keyboard navigation, screen readers, and storage-denied/full browser scenarios.
-- [ ] Deploy only over HTTPS and configure cache headers intentionally.
+## Manual smoke-test checklist
+
+There is currently no automated test suite. Before relying on changes, manually check:
+
+- [ ] App loads when served over HTTP(S), and the crypto worker initializes.
+- [ ] A new identity is generated once and remains the same after reload.
+- [ ] The public key copy control copies the full key.
+- [ ] A valid key can be added as a contact and used as a recipient; invalid keys are rejected.
+- [ ] Sending reports relay failures and does not claim success if publication fails.
+- [ ] A recipient can decrypt a test message sent to their key.
+- [ ] Incoming messages are deduplicated and appear in the inbox.
+- [ ] Search, folder switching, starring, reply, trash, restore, and permanent delete work.
+- [ ] The app gives a clear error if browser storage is unavailable or full.
+- [ ] Keyboard and screen-reader access works for navigation, mail actions, and the compose dialog.
 
 ## Contributing
 
-Use the `experiments` branch for exploratory changes. Keep changes small, document behavior and limitations, and verify them before merging to `main`. Never commit secret keys or real private identity data.
+Use the `experiments` branch for exploratory work. Keep changes focused, document any behavior or security trade-offs, and run the smoke-test checklist before proposing a merge to `main`. Never commit secret keys, real user messages, or other private data.
+
+## License
+
+No license file is currently included. Unless a license is added, assume that normal copyright restrictions apply; ask the repository owner before redistributing or reusing the code.
