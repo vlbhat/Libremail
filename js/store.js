@@ -1,147 +1,193 @@
+const DEFAULT_RELAY = 'wss://relay.primal.net';
+
+function readJson(key, fallback) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || 'null');
+    return value ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function save(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (error) {
+    console.error(`Could not persist ${key}.`, error);
+    return false;
+  }
+}
+
 export const store = {
   emails: [],
   contacts: [],
-  relayUrl: 'wss://relay.primal.net',
+  relayUrl: DEFAULT_RELAY,
   currentFolder: 'inbox',
 
   init() {
+    const emails = readJson('libremail_emails', []);
+    const contacts = readJson('libremail_contacts', []);
+    this.emails = Array.isArray(emails) ? emails.filter(item => item && typeof item === 'object') : [];
+    this.contacts = Array.isArray(contacts) ? contacts.filter(item => item && typeof item === 'object') : [];
     try {
-      this.emails = JSON.parse(localStorage.getItem('libremail_emails') || '[]');
-      this.contacts = JSON.parse(localStorage.getItem('libremail_contacts') || '[]');
-      this.relayUrl = localStorage.getItem('libremail_relay') || 'wss://relay.primal.net';
-    } catch (e) {
-      this.emails = [];
-      this.contacts = [];
-      this.relayUrl = 'wss://relay.primal.net';
+      this.relayUrl = localStorage.getItem('libremail_relay') || DEFAULT_RELAY;
+    } catch {
+      this.relayUrl = DEFAULT_RELAY;
     }
   },
 
   getSecretKey() {
-    return localStorage.getItem('libremail_sk');
+    try {
+      return localStorage.getItem('libremail_sk');
+    } catch {
+      return null;
+    }
   },
 
   setSecretKey(hex) {
-    if (hex) localStorage.setItem('libremail_sk', hex);
+    if (typeof hex !== 'string' || !hex) return false;
+    try {
+      localStorage.setItem('libremail_sk', hex);
+      return true;
+    } catch (error) {
+      console.error('Could not persist account key.', error);
+      return false;
+    }
   },
 
   saveEmails() {
-    localStorage.setItem('libremail_emails', JSON.stringify(this.emails));
+    return save('libremail_emails', this.emails);
   },
 
   saveContacts() {
-    localStorage.setItem('libremail_contacts', JSON.stringify(this.contacts));
+    return save('libremail_contacts', this.contacts);
   },
 
   setRelayUrl(url) {
-    const nextUrl = (url || '').trim();
-    if (nextUrl) {
-      this.relayUrl = nextUrl;
-      localStorage.setItem('libremail_relay', nextUrl);
+    if (typeof url !== 'string' || !url.trim()) return false;
+    const previous = this.relayUrl;
+    this.relayUrl = url.trim();
+    try {
+      localStorage.setItem('libremail_relay', this.relayUrl);
+      return true;
+    } catch (error) {
+      this.relayUrl = previous;
+      console.error('Could not persist relay URL.', error);
+      return false;
     }
   },
 
   formatAddress(address = '') {
     const text = String(address || '').trim();
     if (!text) return '';
-
-    if (text.includes('@')) {
-      const [localPart, domain] = text.split('@');
-      if (localPart && domain) {
-        return localPart.length > 12
-          ? `${localPart.slice(0, 8)}...@${domain}`
-          : text;
-      }
-    }
-
     if (text.length <= 16) return text;
     return `${text.slice(0, 6)}...${text.slice(-4)}`;
   },
 
   getFilteredEmails(folderOrQuery = this.currentFolder, searchQuery = '') {
-    let activeFolder = this.currentFolder || 'inbox';
+    let folder = this.currentFolder || 'inbox';
     let query = '';
-
-    if (typeof folderOrQuery === 'string' && ['inbox', 'sent', 'trash', 'starred', 'contacts'].includes(folderOrQuery)) {
-      activeFolder = folderOrQuery;
+    const folders = ['inbox', 'sent', 'trash', 'starred'];
+    if (typeof folderOrQuery === 'string' && folders.includes(folderOrQuery)) {
+      folder = folderOrQuery;
       query = typeof searchQuery === 'string' ? searchQuery : '';
     } else {
-      activeFolder = this.currentFolder || 'inbox';
       query = typeof folderOrQuery === 'string' ? folderOrQuery : '';
     }
 
-    this.currentFolder = activeFolder;
     const normalizedQuery = query.toLowerCase().trim();
-
-    return this.emails.filter(msg => {
-      const msgFolder = msg.folder || 'inbox';
-      const matchesFolder = activeFolder === 'starred' ? msg.starred : (msgFolder === activeFolder);
+    return this.emails.filter(message => {
+      const item = message || {};
+      const matchesFolder = folder === 'starred'
+        ? Boolean(item.starred)
+        : (item.folder || 'inbox') === folder;
       if (!matchesFolder) return false;
-
       if (!normalizedQuery) return true;
-
-      const subject = String(msg.subject || '').toLowerCase();
-      const body = String(msg.body || '').toLowerCase();
-      const sender = String(msg.senderHandle || msg.from || '').toLowerCase();
-
-      return subject.includes(normalizedQuery)
-        || body.includes(normalizedQuery)
-        || sender.includes(normalizedQuery);
+      return String(item.subject || '').toLowerCase().includes(normalizedQuery) ||
+        String(item.body || '').toLowerCase().includes(normalizedQuery) ||
+        String(item.senderHandle || item.from || '').toLowerCase().includes(normalizedQuery);
     });
   },
 
-  addEmail(msg) {
-    if (!msg || !msg.id) return false;
-    const existingIndex = this.emails.findIndex(m => m.id === msg.id);
-    if (existingIndex !== -1) return false;
-    this.emails.unshift(msg);
-    this.saveEmails();
+  addEmail(message) {
+    if (!message || typeof message.id !== 'string' || !message.id) return false;
+    if (this.emails.some(item => item.id === message.id)) return false;
+    this.emails.unshift(message);
+    if (!this.saveEmails()) {
+      this.emails.shift();
+      return false;
+    }
     return true;
   },
 
   moveToTrash(id) {
-    const msg = this.emails.find(m => m.id === id);
-    if (msg) {
-      msg.folder = 'trash';
-      this.saveEmails();
+    const message = this.emails.find(item => item.id === id);
+    if (!message || message.folder === 'trash') return false;
+    message.previousFolder = message.folder || 'inbox';
+    message.folder = 'trash';
+    if (!this.saveEmails()) {
+      message.folder = message.previousFolder;
+      delete message.previousFolder;
+      return false;
     }
+    return true;
   },
 
   restoreFromTrash(id) {
-    const msg = this.emails.find(m => m.id === id);
-    if (msg) {
-      msg.folder = 'inbox';
-      this.saveEmails();
+    const message = this.emails.find(item => item.id === id);
+    if (!message || message.folder !== 'trash') return false;
+    const oldFolder = message.folder;
+    message.folder = message.previousFolder || 'inbox';
+    delete message.previousFolder;
+    if (!this.saveEmails()) {
+      message.folder = oldFolder;
+      return false;
     }
+    return true;
   },
 
   permanentDelete(id) {
-    this.emails = this.emails.filter(m => m.id !== id);
-    this.saveEmails();
+    const previous = this.emails;
+    this.emails = this.emails.filter(message => message.id !== id);
+    if (!this.saveEmails()) {
+      this.emails = previous;
+      return false;
+    }
+    return true;
   },
 
   toggleStar(id) {
-    const msg = this.emails.find(m => m.id === id);
-    if (msg) {
-      msg.starred = !msg.starred;
-      this.saveEmails();
-      return msg;
+    const message = this.emails.find(item => item.id === id);
+    if (!message) return null;
+    message.starred = !message.starred;
+    if (!this.saveEmails()) {
+      message.starred = !message.starred;
+      return null;
     }
-    return null;
+    return message;
   },
 
   addContact(contact) {
-    if (!contact || !contact.pubkey) return false;
-    const exists = this.contacts.some(c => c.pubkey === contact.pubkey);
-    if (exists) return false;
-    this.contacts.push(contact);
-    this.saveContacts();
+    if (!contact || typeof contact.pubkey !== 'string' || !/^[0-9a-f]{64}$/i.test(contact.pubkey)) return false;
+    const key = contact.pubkey.toLowerCase();
+    if (this.contacts.some(item => String(item.pubkey || '').toLowerCase() === key)) return false;
+    const normalized = { ...contact, pubkey: key };
+    this.contacts.push(normalized);
+    if (!this.saveContacts()) {
+      this.contacts.pop();
+      return false;
+    }
     return true;
   },
 
   removeContact(index) {
-    if (Number.isInteger(index) && index >= 0 && index < this.contacts.length) {
-      this.contacts.splice(index, 1);
-      this.saveContacts();
+    if (!Number.isInteger(index) || index < 0 || index >= this.contacts.length) return false;
+    const [removed] = this.contacts.splice(index, 1);
+    if (!this.saveContacts()) {
+      this.contacts.splice(index, 0, removed);
+      return false;
     }
-  }
+    return true;
+  },
 };
