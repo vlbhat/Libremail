@@ -12,6 +12,7 @@ export const store = {
     } catch (e) {
       this.emails = [];
       this.contacts = [];
+      this.relayUrl = 'wss://relay.primal.net';
     }
   },
 
@@ -20,7 +21,7 @@ export const store = {
   },
 
   setSecretKey(hex) {
-    localStorage.setItem('libremail_sk', hex);
+    if (hex) localStorage.setItem('libremail_sk', hex);
   },
 
   saveEmails() {
@@ -32,63 +33,66 @@ export const store = {
   },
 
   setRelayUrl(url) {
-    if (url) {
-      this.relayUrl = url;
-      localStorage.setItem('libremail_relay', url);
+    const nextUrl = (url || '').trim();
+    if (nextUrl) {
+      this.relayUrl = nextUrl;
+      localStorage.setItem('libremail_relay', nextUrl);
     }
   },
 
   formatAddress(address = '') {
     if (!address) return '';
+    const text = String(address).trim();
+    if (!text) return '';
 
-    if (address.includes('@')) {
-      const [localPart, domain] = address.split('@');
+    if (text.includes('@')) {
+      const [localPart, domain] = text.split('@');
       if (localPart && domain) {
         return localPart.length > 12
           ? `${localPart.slice(0, 8)}...@${domain}`
-          : address;
+          : text;
       }
     }
 
-    if (address.length <= 16) return address;
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    if (text.length <= 16) return text;
+    return `${text.slice(0, 6)}...${text.slice(-4)}`;
   },
 
-  // Fully robust filtered emails method matching all UI calls
   getFilteredEmails(folder = this.currentFolder, searchQuery = '') {
-    let activeFolder = this.currentFolder;
+    let activeFolder = this.currentFolder || 'inbox';
     let query = '';
 
     if (typeof folder === 'string' && ['inbox', 'sent', 'trash', 'starred', 'contacts'].includes(folder)) {
       activeFolder = folder;
       query = typeof searchQuery === 'string' ? searchQuery : '';
     } else {
-      query = typeof folder === 'string' ? folder : '';
+      query = typeof folder === 'string' ? folder : String(searchQuery || '');
     }
 
     this.currentFolder = activeFolder;
     const normalizedQuery = query.toLowerCase().trim();
 
     return this.emails.filter(msg => {
-      // Default folder assignment for older stored messages if missing
       const msgFolder = msg.folder || 'inbox';
       const matchesFolder = activeFolder === 'starred' ? msg.starred : (msgFolder === activeFolder);
       if (!matchesFolder) return false;
 
-      // Search query filtering rule
       if (!normalizedQuery) return true;
-      const matchSubject = (msg.subject || '').toLowerCase().includes(normalizedQuery);
-      const matchBody = (msg.body || '').toLowerCase().includes(normalizedQuery);
-      const matchSender = (msg.senderHandle || msg.from || '').toLowerCase().includes(normalizedQuery);
-      return matchSubject || matchBody || matchSender;
+
+      const subject = String(msg.subject || '').toLowerCase();
+      const body = String(msg.body || '').toLowerCase();
+      const sender = String(msg.senderHandle || msg.from || '').toLowerCase();
+
+      return subject.includes(normalizedQuery)
+        || body.includes(normalizedQuery)
+        || sender.includes(normalizedQuery);
     });
   },
 
   addEmail(msg) {
+    if (!msg || !msg.id) return false;
     const existingIndex = this.emails.findIndex(m => m.id === msg.id);
-    if (existingIndex !== -1) {
-      return false; 
-    }
+    if (existingIndex !== -1) return false;
     this.emails.unshift(msg);
     this.saveEmails();
     return true;
@@ -126,12 +130,18 @@ export const store = {
   },
 
   addContact(contact) {
+    if (!contact || !contact.pubkey) return false;
+    const exists = this.contacts.some(c => c.pubkey === contact.pubkey);
+    if (exists) return false;
     this.contacts.push(contact);
     this.saveContacts();
+    return true;
   },
 
   removeContact(index) {
-    this.contacts.splice(index, 1);
-    this.saveContacts();
+    if (Number.isInteger(index) && index >= 0 && index < this.contacts.length) {
+      this.contacts.splice(index, 1);
+      this.saveContacts();
+    }
   }
 };

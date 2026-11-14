@@ -11,13 +11,14 @@ self.onmessage = async (e) => {
       const secretKey = hexToBytes(hex);
       const publicKey = getPublicKey(secretKey);
       self.postMessage({ id, success: true, data: { hex, secretKey, publicKey } });
+      return;
     }
-    
-    else if (action === 'encryptEmail') {
+
+    if (action === 'encryptEmail') {
       const { senderSkHex, recipientPk, payloadObj, replyToId } = payload;
       const senderSk = hexToBytes(senderSkHex);
       const senderPk = getPublicKey(senderSk);
-      
+
       const tags = [['p', recipientPk]];
       if (replyToId) tags.push(['e', replyToId, '', 'reply']);
 
@@ -26,7 +27,7 @@ self.onmessage = async (e) => {
         pubkey: senderPk,
         created_at: Math.floor(Date.now() / 1000),
         tags,
-        content: JSON.stringify(payloadObj),
+        content: JSON.stringify(payloadObj || {}),
       };
 
       const convKey = nip44.v2.utils.getConversationKey(senderSk, recipientPk);
@@ -47,26 +48,39 @@ self.onmessage = async (e) => {
       }, randomSk);
 
       self.postMessage({ id, success: true, data: giftWrap });
+      return;
     }
 
-    else if (action === 'decryptEmail') {
+    if (action === 'decryptEmail') {
       const { recipientSkHex, giftWrapEvent } = payload;
+      if (!giftWrapEvent || !giftWrapEvent.content) {
+        self.postMessage({ id, success: true, data: null });
+        return;
+      }
+
       const recipientSk = hexToBytes(recipientSkHex);
 
       if (!verifyEvent(giftWrapEvent)) {
-        return self.postMessage({ id, success: true, data: null });
+        self.postMessage({ id, success: true, data: null });
+        return;
       }
 
       const wrapKey = nip44.v2.utils.getConversationKey(recipientSk, giftWrapEvent.pubkey);
       const seal = JSON.parse(nip44.v2.decrypt(giftWrapEvent.content, wrapKey));
-      if (!verifyEvent(seal)) {
-        return self.postMessage({ id, success: true, data: null });
+      if (!seal || !verifyEvent(seal)) {
+        self.postMessage({ id, success: true, data: null });
+        return;
       }
 
       const sealKey = nip44.v2.utils.getConversationKey(recipientSk, seal.pubkey);
       const rumor = JSON.parse(nip44.v2.decrypt(seal.content, sealKey));
+      if (!rumor || !rumor.content) {
+        self.postMessage({ id, success: true, data: null });
+        return;
+      }
+
       const data = JSON.parse(rumor.content);
-      const replyTag = rumor.tags.find(t => t[0] === 'e');
+      const replyTag = rumor.tags?.find(t => t[0] === 'e');
 
       const decrypted = {
         id: giftWrapEvent.id,
@@ -79,6 +93,7 @@ self.onmessage = async (e) => {
       };
 
       self.postMessage({ id, success: true, data: decrypted });
+      return;
     }
   } catch (err) {
     self.postMessage({ id, success: false, error: err.message });

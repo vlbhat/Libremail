@@ -30,26 +30,29 @@ export async function initIdentity(savedHexKey) {
 }
 
 export async function resolveRecipient(input) {
-  const clean = input.trim().toLowerCase();
+  if (typeof input !== 'string') {
+    throw new Error('Recipient address must be a string.');
+  }
 
-  // 1. If it's a 64-character hex public key, return it directly
+  const clean = input.trim().toLowerCase();
+  if (!clean) {
+    throw new Error('Recipient address is required.');
+  }
+
   if (/^[0-9a-f]{64}$/.test(clean)) return clean;
 
-  // 2. Check local storage override cache
   const localKey = localStorage.getItem(`nip05_${clean}`);
   if (localKey) return localKey;
 
-  // 3. Check saved Contacts list
   try {
     const contacts = JSON.parse(localStorage.getItem('libremail_contacts') || '[]');
-    const matchedContact = contacts.find(c => 
-      c.name.toLowerCase() === clean || 
-      (c.nip05 && c.nip05.toLowerCase() === clean)
+    const matchedContact = contacts.find(c =>
+      (c && typeof c.name === 'string' && c.name.toLowerCase() === clean) ||
+      (c && typeof c.nip05 === 'string' && c.nip05.toLowerCase() === clean)
     );
-    if (matchedContact) return matchedContact.pubkey;
+    if (matchedContact?.pubkey) return matchedContact.pubkey;
   } catch (e) {}
 
-  // 4. Attempt live NIP-05 fetch
   if (clean.includes('@')) {
     if (nip05Cache.has(clean)) return nip05Cache.get(clean);
 
@@ -69,26 +72,21 @@ export async function resolveRecipient(input) {
     }
   }
 
-  // 5. TESTING CONVENIENCE MAPPING:
-  // If testing locally between alice@vercel.app and bob@vercel.app, map them 
-  // directly to their stored public keys in localStorage if available!
-  if (clean === 'alice@vercel.app') {
-    const aliceSk = localStorage.getItem('libremail_sk');
-    if (aliceSk) {
-      // If the current window is alice, use her pubkey or generate mapping
-    }
-  }
-
-  // Fallback: If no external resolution found, throw a helpful alert instead of random key
   throw new Error(`Could not resolve "${input}". Please add this user to your Contacts with their public key first.`);
 }
 
 export async function encryptEmail(senderSk, recipientPk, payloadObj, replyToId = null) {
+  if (!senderSk || !recipientPk) {
+    throw new Error('Missing sender or recipient key material.');
+  }
   const senderSkHex = bytesToHex(senderSk);
   return await runInWorker('encryptEmail', { senderSkHex, recipientPk, payloadObj, replyToId });
 }
 
 export async function decryptEmail(recipientSk, giftWrapEvent) {
+  if (!recipientSk || !giftWrapEvent) {
+    return null;
+  }
   const recipientSkHex = bytesToHex(recipientSk);
   return await runInWorker('decryptEmail', { recipientSkHex, giftWrapEvent });
 }
