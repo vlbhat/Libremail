@@ -9,6 +9,7 @@ const VALID_PUBKEY = /^[0-9a-f]{64}$/i;
 export async function publishToRelays(primaryRelay, giftWrapEvent) {
   if (!primaryRelay || typeof primaryRelay !== 'string' || !VALID_RELAY.test(primaryRelay.trim())) return;
   if (!giftWrapEvent || !giftWrapEvent.id) return;
+
   const relays = [primaryRelay.trim()];
   const publishCalls = pool.publish(relays, giftWrapEvent);
   await Promise.any(publishCalls);

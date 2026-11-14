@@ -120,7 +120,7 @@ document.getElementById('mail-list').onclick = (e) => {
       store.addContact({ name: nickname.trim(), pubkey, nip05: '' });
       ui.renderAutocomplete();
       ui.switchView(store.currentFolder, identity.publicKey);
-    },
+    }
   });
 };
 
@@ -137,15 +137,16 @@ document.getElementById('send-btn').onclick = async () => {
     const recipientPk = await resolveRecipient(rawTo);
     const myHandle = localStorage.getItem('libremail_handle') || `${identity.publicKey.slice(0, 6)}...@...${identity.publicKey.slice(-4)}`;
 
-    const giftWrap = await encryptEmail(identity.secretKey, recipientPk, { 
-      subject, 
-      body, 
-      senderHandle: myHandle 
+    const giftWrap = await encryptEmail(identity.secretKey, recipientPk, {
+      subject,
+      body,
+      senderHandle: myHandle
     }, replyId);
-    
+
     if (!isValidRelayUrl(store.relayUrl)) {
       throw new Error('A valid relay URL is required before sending.');
     }
+
     await publishToRelays(store.relayUrl, giftWrap);
 
     const sentMsg = {
@@ -157,7 +158,7 @@ document.getElementById('send-btn').onclick = async () => {
       body,
       senderHandle: myHandle,
       time: Date.now(),
-      starred: false,
+      starred: false
     };
 
     store.addEmail(sentMsg);
@@ -196,7 +197,7 @@ function connectNetwork() {
     },
     onConnected(relay) {
       ui.setStatus(`Connected to ${relay}`);
-    },
+    }
   });
 }
 

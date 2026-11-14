@@ -56,8 +56,7 @@ export const ui = {
     if (!listEl) return;
     const emptyState = listEl.querySelector('.empty-state');
     if (emptyState) emptyState.remove();
-
-    listEl.insertAdjacentHTML('afterend', this.createMailRowHTML(msg, myPublicKey));
+    listEl.insertAdjacentHTML('afterbegin', this.createMailRowHTML(msg, myPublicKey));
   },
 
   renderMailList(myPublicKey) {
@@ -100,7 +99,9 @@ export const ui = {
   },
 
   openReader(msg, myPublicKey, handlers) {
-    document.getElementById('mail-list').style.display = 'none';
+    const listEl = document.getElementById('mail-list');
+    if (listEl) listEl.style.display = 'none';
+
     const readerEl = document.getElementById('mail-reader');
     if (!readerEl) return;
     readerEl.style.display = 'block';
@@ -131,14 +132,19 @@ export const ui = {
       `}
     `;
 
-    document.getElementById('back-btn').onclick = handlers.onBack;
+    const backBtn = document.getElementById('back-btn');
+    if (backBtn) backBtn.onclick = handlers.onBack;
 
     if (isTrash) {
-      document.getElementById('restore-btn').onclick = () => handlers.onRestore(msg.id);
-      document.getElementById('perm-delete-btn').onclick = () => handlers.onPermanentDelete(msg.id);
+      const restoreBtn = document.getElementById('restore-btn');
+      const permDeleteBtn = document.getElementById('perm-delete-btn');
+      if (restoreBtn) restoreBtn.onclick = () => handlers.onRestore(msg.id);
+      if (permDeleteBtn) permDeleteBtn.onclick = () => handlers.onPermanentDelete(msg.id);
     } else {
-      document.getElementById('reply-btn').onclick = () => handlers.onReply(msg.from, replySubject, msg.id);
-      document.getElementById('trash-btn').onclick = () => handlers.onDelete(msg.id);
+      const replyBtn = document.getElementById('reply-btn');
+      const trashBtn = document.getElementById('trash-btn');
+      if (replyBtn) replyBtn.onclick = () => handlers.onReply(msg.from, replySubject, msg.id);
+      if (trashBtn) trashBtn.onclick = () => handlers.onDelete(msg.id);
       const saveBtn = document.getElementById('save-sender-btn');
       if (saveBtn) saveBtn.onclick = () => handlers.onSaveSender(msg.from, msg.id);
     }
@@ -151,6 +157,7 @@ export const ui = {
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     const navEl = document.getElementById(`nav-${nextFolder}`);
     if (navEl) navEl.classList.add('active');
+
     const titleEl = document.getElementById('folder-title');
     if (titleEl) titleEl.textContent = nextFolder.charAt(0).toUpperCase() + nextFolder.slice(1);
 
@@ -187,5 +194,5 @@ export const ui = {
   closeCompose() {
     const composeModal = document.getElementById('compose-modal');
     if (composeModal) composeModal.style.display = 'none';
-  },
+  }
 };

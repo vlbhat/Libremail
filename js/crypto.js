@@ -1,7 +1,6 @@
 import { hexToBytes } from 'https://esm.sh/@noble/hashes@1.3.3/utils';
 
 const HEX_64 = /^[0-9a-f]{64}$/i;
-
 const worker = new Worker(new URL('./crypto-worker.js', import.meta.url), { type: 'module' });
 
 let messageId = 0;
@@ -92,13 +91,16 @@ export async function encryptEmail(senderSk, recipientPk, payloadObj, replyToId 
     throw new Error('Missing or invalid sender/recipient key material.');
   }
   const senderSkHex = bytesToHex(senderSk);
-  return await runInWorker('encryptEmail', { senderSkHex, recipientPk: String(recipientPk).trim().toLowerCase(), payloadObj, replyToId });
+  return await runInWorker('encryptEmail', {
+    senderSkHex,
+    recipientPk: String(recipientPk).trim().toLowerCase(),
+    payloadObj,
+    replyToId
+  });
 }
 
 export async function decryptEmail(recipientSk, giftWrapEvent) {
-  if (!recipientSk || !giftWrapEvent) {
-    return null;
-  }
+  if (!recipientSk || !giftWrapEvent) return null;
   const recipientSkHex = bytesToHex(recipientSk);
   return await runInWorker('decryptEmail', { recipientSkHex, giftWrapEvent });
 }

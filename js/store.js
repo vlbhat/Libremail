@@ -41,8 +41,7 @@ export const store = {
   },
 
   formatAddress(address = '') {
-    if (!address) return '';
-    const text = String(address).trim();
+    const text = String(address || '').trim();
     if (!text) return '';
 
     if (text.includes('@')) {
@@ -58,15 +57,16 @@ export const store = {
     return `${text.slice(0, 6)}...${text.slice(-4)}`;
   },
 
-  getFilteredEmails(folder = this.currentFolder, searchQuery = '') {
+  getFilteredEmails(folderOrQuery = this.currentFolder, searchQuery = '') {
     let activeFolder = this.currentFolder || 'inbox';
     let query = '';
 
-    if (typeof folder === 'string' && ['inbox', 'sent', 'trash', 'starred', 'contacts'].includes(folder)) {
-      activeFolder = folder;
+    if (typeof folderOrQuery === 'string' && ['inbox', 'sent', 'trash', 'starred', 'contacts'].includes(folderOrQuery)) {
+      activeFolder = folderOrQuery;
       query = typeof searchQuery === 'string' ? searchQuery : '';
     } else {
-      query = typeof folder === 'string' ? folder : String(searchQuery || '');
+      activeFolder = this.currentFolder || 'inbox';
+      query = typeof folderOrQuery === 'string' ? folderOrQuery : '';
     }
 
     this.currentFolder = activeFolder;
